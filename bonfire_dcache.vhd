@@ -38,7 +38,8 @@ generic(
   MASTER_DATA_WIDTH : natural := 128; -- 16 Bytes....
   LINE_SIZE : natural :=4; -- Line size in MASTER_DATA_WIDTH  words
   CACHE_SIZE : natural :=2048; -- Cache Size in MASTER_DATA_WIDTH Bit words
-  ADDRESS_BITS : natural := 30  -- Number of bits of chacheable address range
+  ADDRESS_BITS : natural := 30;  -- Number of bits of chacheable address range
+  DEVICE_FAMILY : string :=""
 );
 Port (
    clk_i: in std_logic;
@@ -73,6 +74,9 @@ Port (
 end bonfire_dcache;
 
 architecture Behavioral of bonfire_dcache is
+
+attribute keep_hierarchy : string;
+attribute keep_hierarchy of Behavioral: architecture is "TRUE";
 
 constant  WORD_SELECT_BITS : natural := log2.log2(MASTER_DATA_WIDTH/32);
 constant CL_BITS : natural :=log2.log2(LINE_SIZE); -- Bits for adressing a word in a cache line
@@ -113,18 +117,14 @@ constant init_dirty_bits : t_dirty_bits := (others=>'0');
 constant init_tag_data : t_tag_data := ('0','0',to_unsigned(0,t_tag_value'length));
 
 type t_tag_ram is array (0 to TAG_RAM_SIZE-1) of t_tag_bits;
-type t_cache_ram is array (0 to CACHE_SIZE-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
+--type t_cache_ram is array (0 to CACHE_SIZE-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
 
 signal tag_value : t_tag_value;
 signal tag_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0); -- Offset into TAG RAM
 
 signal tag_ram : t_tag_ram := (others =>(others=> '0')) ;
 attribute ram_style: string; -- for Xilinx
-attribute ram_style of tag_ram: signal is "block";
-
-
-shared variable cache_ram : t_cache_ram;
-attribute ram_style of cache_ram: variable is "block";
+attribute ram_style of tag_ram: signal is  "distributed"; -- "block";
 
 signal tag_we : std_logic:='0'; -- Tag RAM Write Enable - updates Tag RAM
 
@@ -143,7 +143,6 @@ signal hit,miss : std_logic;
 signal slave_rd_ack : std_logic :='0';
 
 signal slave_write_enable : std_logic; -- combinatorial, slave write cycle enabled
-
 signal write_back_enable : std_logic; -- combinatorial, actual tag line must be written back
 
 -- Bus master signals
@@ -165,7 +164,7 @@ signal wbm_state : t_wbm_state:=wb_idle;
 signal cache_AdrBus : std_logic_vector(CACHE_ADR_BITS-1 downto 0);
 signal cache_DBOut,cache_DBIn : std_logic_vector (MASTER_DATA_WIDTH-1 downto 0);
 signal cache_wren : std_logic_vector (MASTER_WIDTH_BYTES-1 downto 0);
-signal cache_ena : std_logic;
+signal slave_en_i, master_en_i, master_we_i : std_logic;
 
 
  function is_sel(adr: std_logic_vector (slave_adr'range);mux:natural) return boolean is
@@ -198,16 +197,17 @@ signal cache_ena : std_logic;
      return r;
    end function;
 
+   impure function gen_sp6_special return boolean is
+   begin
+     return DEVICE_FAMILY = "SPARTAN6" and CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32;
+   end;
 
 begin
 
 
-  cache_AdrBus<= std_logic_vector(buffer_index) &
-                 std_logic_vector (cache_offset_counter) when write_back_enable='1'  else
-                 
-                std_logic_vector(tag_index) & std_logic_vector(master_offset_counter); 
-              --   else slave_adr(CACHEADR_HI  downto CACHEADR_LOW);
-
+  assert gen_sp6_special
+  report "Module bonfire_dcache: On Spartan 6 generic synthesis of Cache RAM will most likely fail, use only CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32 for a hard coded work around"
+  severity warning;
 
 
 
@@ -257,8 +257,8 @@ begin
     
     
   -- mapping between tag bitstring and record, needed because of synthesis limiations
-  tag_buffer <= to_tag_data(tag_out);
   tag_in <= to_tag_bits( (not write_back_enable,slave_write_enable,tag_value));   
+  tag_buffer <= to_tag_data(tag_out);
     
   proc_tag_ram:process(clk_i)
     
@@ -276,6 +276,7 @@ begin
              end if;
           end if; 
           buffer_index<=tag_index;  
+          --tag_out <= tag_ram(to_integer(tag_index)); -- read first RAM
         end if;
     
       end process;
@@ -290,84 +291,106 @@ begin
   end generate;
   
   
-  proc_cache_wren:process(wbs_sel_i,slave_adr,wbs_we_i) begin
-  
-   for i in 0 to MUX_SIZE-1 loop
-     if is_sel(slave_adr,i) and wbs_we_i='1' then
-       cache_wren((i+1)*4-1 downto i*4) <= wbs_sel_i;
-     else
-       cache_wren((i+1)*4-1 downto i*4) <= "0000";
-     end if;     
-    end loop;
-  
-  end process;
-  
-  
-  proc_cache_rdmux:process(cache_DBOut,slave_adr) begin
- -- Databus Multiplexer, select the 32 Bit word from the cache ram word.
-    for i in 0 to MUX_SIZE-1 loop
-      if is_sel(slave_adr,i) then
-        wbs_dat_o <= cache_DBOut((i+1)*32-1 downto i*32);
-      end if;
-    end loop; 
-  end process;
-   
+ 
+     proc_cache_wren:process(wbs_sel_i,slave_adr,wbs_we_i) begin
+     
+      for i in 0 to MUX_SIZE-1 loop
+        if is_sel(slave_adr,i) and wbs_we_i='1' then
+          cache_wren((i+1)*4-1 downto i*4) <= wbs_sel_i;
+        else
+          cache_wren((i+1)*4-1 downto i*4) <= "0000";
+        end if;     
+       end loop;
+     
+     end process;
+     
+     
+     proc_cache_rdmux:process(cache_DBOut,slave_adr) begin
+    -- Databus Multiplexer, select the 32 Bit word from the cache ram word.
+       for i in 0 to MUX_SIZE-1 loop
+         if is_sel(slave_adr,i) then
+           wbs_dat_o <= cache_DBOut((i+1)*32-1 downto i*32);
+         end if;
+       end loop; 
+     end process;
+
  
   proc_slave_rd_ack: process(clk_i) begin
   
      if rising_edge(clk_i) then  
        if slave_rd_ack='1' then
           slave_rd_ack <= '0';
-       elsif hit='1' and wbs_enable='1' and wbs_we_i='0' then
+       elsif hit='1' and wbs_enable='1' and wbs_we_i='0'  then
          slave_rd_ack<='1';
        end if;
      end if;       
   
   end process;     
       
-      
-   proc_cache_ram_slave: process(clk_i)
-   --variable cache_rd : std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
-   variable master_cache_address : std_logic_vector(wbm_adr_o'range);
-   
-   begin
-      
-      if rising_edge(clk_i) then
-      
-        -- in case of hit read cache and ack slave wishbone bus
-        if hit='1' and wbs_enable='1' then 
-            -- -- write cycle
-           for b in cache_wren'range loop -- byte selector
-              if cache_wren(b)='1' then
-                cache_ram(to_integer(unsigned(slave_adr(CACHEADR_HI  downto CACHEADR_LOW))))((b+1)*8-1 downto b*8):=cache_DBIn((b+1)*8-1 downto b*8);
-              end if;
-           end loop;
-           --  read cycle
-           cache_DBOut <= cache_ram(to_integer(unsigned(slave_adr(CACHEADR_HI  downto CACHEADR_LOW))));
-        end if;       
-      end if;
-    end process;
-    
-    
-   cache_ram_master: process(clk_i) begin
-   
-     if rising_edge (clk_i) then
-       
-         if (wbm_ack_i='1' and wbm_enable='1') or 
-            (write_back_enable='1' and wbm_state=wb_idle) then -- RAM Enable
-            
-            if  wbm_ack_i='1' and write_back_enable='0' then  -- RAM WE
-              cache_ram(to_integer(unsigned(cache_AdrBus))):=wbm_dat_i;
-            end if;
-              
-            cache_ram_out <= cache_ram(to_integer(unsigned(cache_AdrBus)));
-         end if;
-         
-   
-     
-     end if;
-   end process;
   
+  -- Interface to Cache RAM
+  
+  slave_en_i <= hit and wbs_enable;
+  
+  master_en_i <= '1' when (wbm_ack_i='1' and wbm_enable='1') or 
+                         (write_back_enable='1' and wbm_state=wb_idle)
+                     else '0';    
+  
+  master_we_i <= wbm_ack_i and  not write_back_enable;
+     
+  cache_AdrBus<= std_logic_vector(buffer_index) &
+                 std_logic_vector (cache_offset_counter) when write_back_enable='1'  else
+   
+                 std_logic_vector(tag_index) & std_logic_vector(master_offset_counter); 
+  
+  
+  cache_ram_generic: if not gen_sp6_special generate
+  Inst_bonfire_dcache_cacheram: entity work.bonfire_dcache_cacheram 
+  GENERIC MAP (
+    CACHE_SIZE => CACHE_SIZE,
+    MASTER_DATA_WIDTH => MASTER_DATA_WIDTH,
+    ATTR_KEEP_HIERARCHY => "FALSE"
+  
+  )
+  PORT MAP(
+      slave_db_i => cache_DBIn,
+      slave_db_o => cache_DBOut,
+      slave_wren_i => cache_wren,
+      slave_en_i => slave_en_i ,
+      slave_adr_i => slave_adr(CACHEADR_HI  downto CACHEADR_LOW),
+      master_db_i => wbm_dat_i,
+      master_db_o => cache_ram_out,
+      master_we_i => master_we_i,
+      master_en_i => master_en_i ,
+      master_adr_i => cache_AdrBus,
+      clk_i => clk_i
+   );
+end generate;
+
+cache_ram_spartan6: if  gen_sp6_special generate
+  Inst_bonfire_dcache_cacheram: entity work.dcache_ram8K_spartan6 
+  GENERIC MAP (
+    CACHE_SIZE => CACHE_SIZE,
+    MASTER_DATA_WIDTH => MASTER_DATA_WIDTH,
+    ATTR_KEEP_HIERARCHY => "FALSE"
+  
+  )
+  PORT MAP(
+      slave_db_i => cache_DBIn,
+      slave_db_o => cache_DBOut,
+      slave_wren_i => cache_wren,
+      slave_en_i => slave_en_i ,
+      slave_adr_i => slave_adr(CACHEADR_HI  downto CACHEADR_LOW),
+      master_db_i => wbm_dat_i,
+      master_db_o => cache_ram_out,
+      master_we_i => master_we_i,
+      master_en_i => master_en_i ,
+      master_adr_i => cache_AdrBus,
+      clk_i => clk_i
+   );
+end generate;
+   
+      
       
 -- Master State engine
       
@@ -380,6 +403,8 @@ begin
    wbm_adr_o <= master_address;
       
    wbm_dat_o <= cache_ram_out;    
+   
+   tag_we <= '1' when wbm_ack_i='1' and wbm_state=wb_finish else '0';
       
    master_rw: process(clk_i) -- Master cycle state engine
    variable n : unsigned(master_offset_counter'range);
@@ -390,7 +415,7 @@ begin
             wbm_state<=wb_idle;
             master_offset_counter<=to_unsigned(0,master_offset_counter'length);
             cache_offset_counter<=to_unsigned(0,cache_offset_counter'length);
-            tag_we<='0';
+           -- tag_we <= '0';
         else
           case wbm_state is
             when wb_idle =>
@@ -403,9 +428,8 @@ begin
                 if write_back_enable='1'  then
                    cache_offset_counter<=master_offset_counter+1;
                    wbm_we_o<='1';
-              --     wbm_dat_o <= cache_ram_out;
-                   wbm_cti_o<="010"; -- for the moment write without burst...
-                   wbm_state<=wb_burst_write;-- When some dirty bits start with a write back burst
+                   wbm_cti_o<="010"; 
+                   wbm_state<=wb_burst_write;
                 else
                    wbm_we_o<='0';
                    wbm_cti_o<="010";
@@ -416,11 +440,9 @@ begin
              when  wb_burst_read|wb_burst_write =>
                n:=master_offset_counter+1;
                if  wbm_ack_i='1' then
-              --    wbm_dat_o <= cache_ram_out;
                   if std_logic_vector(n)=LINE_MAX then
                      wbm_cti_o<="111";
                      wbm_state<=wb_finish;
-                    
                    end if;
                    master_offset_counter<=n;
                    cache_offset_counter<=n+1; -- used for address look ahead in write back mode
@@ -428,27 +450,20 @@ begin
                  
              when wb_finish=>
                if  wbm_ack_i='1' then
-                  tag_we<='1';
                   wbm_enable<='0';
                   wbm_we_o<='0';
+              --    tag_we<='1';
                   master_offset_counter<=to_unsigned(0,master_offset_counter'length);
                   cache_offset_counter<=to_unsigned(0,cache_offset_counter'length);
-                  --if write_back_enable='1' then
-                    --wbm_state<=wb_idle;
-                  --else
-                    wbm_state<=wb_retire;
-                  --end if;
+                  wbm_state<=wb_retire;
                 end if;
-             when wb_retire=>
-               tag_we<='0';
-               wbm_state <= wb_idle;
+            when wb_retire=>
+            --  tag_we<='0';
+              wbm_state<=wb_idle;            
           end case;
         
         end if;
       end if;
-   
-   
-   
    end process;
 
 

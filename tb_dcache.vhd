@@ -257,9 +257,9 @@ begin
            if s then
              report "Sucessfull read from address " & hex_string(adr);
            else
-            report "Error reading from address " & hex_string(adr) & " Data:" & hex_string(d)
-            severity error;
-            success:=false;
+             report "Error reading from address " & hex_string(adr) & " Data:" & hex_string(d)
+             severity error;
+             success:=false;
            end if;
          end loop;
 
@@ -364,16 +364,18 @@ begin
         -- Do different read test in "pattern" mode, this allows to test in the whole
         -- address range
         sim_mode<=sim_pattern;
+      
         read_loop(X"00000000",LINE_SIZE_WORDS*2,s); -- read two cache lines
+        assert s report "Test failed" severity failure;
         read_loop(X"00000000",LINE_SIZE_WORDS*2,s); -- read  the same two cache lines
-
+        assert s report "Test failed" severity failure;
         read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES-LINE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s); -- read  from last line
-
+        assert s report "Test failed" severity failure;
         read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s); -- wrap around, should invalidate line 0
-
+        assert s report "Test failed" severity failure;
         temp:=X"FFFFFFFF" and not std_logic_vector(to_unsigned(LINE_SIZE_BYTES-1,32));
         read_loop(std_logic_vector(temp(31 downto 0)),LINE_SIZE_WORDS,s); -- read from end of address range
-
+        assert s report "Test failed" severity failure;
 
         report "Read Test finished";
         sim_mode<=sim_ram;
@@ -384,7 +386,7 @@ begin
         if d=X"AABBCCDD" then
           report "Write successfull";
         else
-          report "Write error";
+          report "Write error" severity failure;
         end if;
 
         -- Byte Write Test
@@ -398,7 +400,7 @@ begin
 
         -- Read the whole RAM areas
         read_loop(X"00000000",ram'length*(MASTER_DATA_WIDTH/32),s);
-
+        assert s report "Test failed" severity error;
         -- Stop the clock and hence terminate the simulation
         TbSimEnded <= '1';
         wait;
