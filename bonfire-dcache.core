@@ -1,11 +1,11 @@
 CAPI=1
 [main]
 name = ::bonfire-dcache:0
-depend =
+depend = ::bonfire-util:0
 backend = ise
 
 [fileset rtl]
-files =  util/log2.vhd bonfire_dcache.vhd
+files =  bonfire_dcache.vhd
 file_type=vhdlSource
 
 [fileset sim]
@@ -15,13 +15,11 @@ usage=sim
 scope = private
 
 
-[ise]
-#ucf_files = BPC3011-Papilio_Pro-general.ucf
-family = spartan6
-device = xc6slx9
-package = tqg144
-speed = -2
-top_module = bonfire_dcache
 
 [simulator]
 toplevel = tb_dcache
+
+[provider]
+name=github
+user=bonfireprocessor
+repo=bonfire-dcache
