@@ -3,10 +3,16 @@ CAPI=1
 name = ::bonfire-dcache:0
 depend = ::bonfire-util:0
 backend = ise
+simulators=isim
 
 [fileset rtl]
-files =  bonfire_dcache.vhd
+files =  bonfire_dcache_cacheram.vhd bonfire_dcache.vhd
 file_type=vhdlSource
+
+[fileset rtl_spartan6]
+files = spartan6/ram2048x8.vhd spartan6/dcache_ram8K_spartan6.vhd
+file_type=vhdlSource
+#usage=synth
 
 [fileset sim]
 files=./tb_dcache.vhd
