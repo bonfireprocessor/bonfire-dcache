@@ -25,7 +25,7 @@ scope = private
 [simulator]
 toplevel = tb_dcache
 
-[provider]
-name=github
-user=bonfireprocessor
-repo=bonfire-dcache
+#[provider]
+#name=github
+#user=bonfireprocessor
+#repo=bonfire-dcache
