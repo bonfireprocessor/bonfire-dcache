@@ -1,21 +1,15 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
+
 -- Create Date:    16:38:14 10/03/2017 
 -- Design Name: 
 -- Module Name:    bonfire_dcache_cacheram - Behavioral 
--- Project Name: 
--- Target Devices: 
--- Tool versions: 
--- Description: 
---
--- Dependencies: 
---
--- Revision: 
--- Revision 0.01 - File Created
--- Additional Comments: 
---
+
+-- The Bonfire Processor Project, (c) 2016,2017 Thomas Hornschuh
+
+-- Generic RAM implementation for inference
+
+
+-- License: See LICENSE or LICENSE.txt File in git project root. 
 ----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;

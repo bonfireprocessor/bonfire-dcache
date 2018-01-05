@@ -1,21 +1,15 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
+
 -- Create Date:    18:13:15 10/03/2017 
--- Design Name: 
 -- Module Name:    dcache_ram8K_spartan6 - Behavioral 
--- Project Name: 
--- Target Devices: 
--- Tool versions: 
--- Description: 
---
--- Dependencies: 
---
--- Revision: 
--- Revision 0.01 - File Created
--- Additional Comments: 
---
+
+-- The Bonfire Processor Project, (c) 2016,2017 Thomas Hornschuh
+
+--  Spartan 6 specific RAM implementation with block RAM primitives
+
+
+-- License: See LICENSE or LICENSE.txt File in git project root. 
+----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;

@@ -1,29 +1,20 @@
 ----------------------------------------------------------------------------------
--- Company:
--- Engineer:
---
+
 -- Create Date: 06/28/2017 04:40:39 PM
 -- Design Name:
 -- Module Name: bonfire_dcache - Behavioral
--- Project Name:
--- Target Devices:
--- Tool Versions:
--- Description:
---
--- Dependencies:
---
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
---
+
+-- The Bonfire Processor Project, (c) 2016,2017 Thomas Hornschuh
+
+-- Data Cache with Wishbone interfaces.
+-- Supports wide (>32Bit) Master Wishbone interface for DDR RAMs
+
+-- License: See LICENSE or LICENSE.txt File in git project root. 
 ----------------------------------------------------------------------------------
 
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
 use IEEE.NUMERIC_STD.ALL;
 
 use work.log2;
@@ -75,8 +66,8 @@ end bonfire_dcache;
 
 architecture Behavioral of bonfire_dcache is
 
-attribute keep_hierarchy : string;
-attribute keep_hierarchy of Behavioral: architecture is "TRUE";
+--attribute keep_hierarchy : string;
+--attribute keep_hierarchy of Behavioral: architecture is "TRUE";
 
 constant  WORD_SELECT_BITS : natural := log2.log2(MASTER_DATA_WIDTH/32);
 constant CL_BITS : natural :=log2.log2(LINE_SIZE); -- Bits for adressing a word in a cache line
