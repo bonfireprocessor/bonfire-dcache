@@ -9,7 +9,7 @@
 -- Data Cache with Wishbone interfaces.
 -- Supports wide (>32Bit) Master Wishbone interface for DDR RAMs
 
--- License: See LICENSE or LICENSE.txt File in git project root. 
+-- License: See LICENSE or LICENSE.txt File in git project root.
 ----------------------------------------------------------------------------------
 
 
@@ -69,6 +69,8 @@ architecture Behavioral of bonfire_dcache is
 --attribute keep_hierarchy : string;
 --attribute keep_hierarchy of Behavioral: architecture is "TRUE";
 
+constant spartan6_name : string := "SPARTAN6";
+
 constant  WORD_SELECT_BITS : natural := log2.log2(MASTER_DATA_WIDTH/32);
 constant CL_BITS : natural :=log2.log2(LINE_SIZE); -- Bits for adressing a word in a cache line
 constant CACHE_ADR_BITS : natural := log2.log2(CACHE_SIZE); -- total adress bits for cache
@@ -89,6 +91,10 @@ constant CL_BITS_SLAVE : natural := log2.log2(LINE_SIZE*MUX_SIZE);
 -- Cache address range in master address
 constant CACHEADR_LOW : natural := wbm_adr_o'low;
 constant CACHEADR_HI : natural  := CACHEADR_LOW+CACHE_ADR_BITS-1;
+
+
+-- Generation options
+constant gen_sp6_special : boolean := DEVICE_FAMILY = spartan6_name and CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32;
 
 
 subtype t_tag_value is unsigned(TAG_RAM_BITS-1 downto 0);
@@ -188,15 +194,15 @@ signal slave_en_i, master_en_i, master_we_i : std_logic;
      return r;
    end function;
 
-   impure function gen_sp6_special return boolean is
-   begin
-     return DEVICE_FAMILY = "SPARTAN6" and CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32;
-   end;
+
+
+
 
 begin
 
 
-  assert gen_sp6_special
+  assert (DEVICE_FAMILY=spartan6_name and gen_sp6_special) or
+         (DEVICE_FAMILY /= spartan6_name )
   report "Module bonfire_dcache: On Spartan 6 generic synthesis of Cache RAM will most likely fail, use only CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32 for a hard coded work around"
   severity warning;
 
@@ -338,7 +344,6 @@ begin
   cache_ram_generic: if not gen_sp6_special generate
 
 
-
   Inst_bonfire_dcache_cacheram: entity work.bonfire_dcache_cacheram
   GENERIC MAP (
     CACHE_SIZE => CACHE_SIZE,
@@ -361,7 +366,8 @@ begin
    );
 end generate;
 
-cache_ram_spartan6: if  gen_sp6_special generate
+
+cache_ram_spartan6: if gen_sp6_special generate
 
 
   Inst_bonfire_dcache_cacheram: entity work.dcache_ram8K_spartan6

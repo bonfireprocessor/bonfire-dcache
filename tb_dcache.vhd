@@ -7,7 +7,12 @@ use ieee.std_logic_1164.all;
 use IEEE.NUMERIC_STD.ALL;
 
 use work.log2;
---use work.common_pkg.all;
+
+
+LIBRARY std;
+USE std.textio.all;
+
+use work.txt_util.all;
 
 entity tb_dcache is
 end tb_dcache;
@@ -16,13 +21,14 @@ end tb_dcache;
 
 architecture tb of tb_dcache is
 
---constant  MASTER_DATA_WIDTH : natural := 128;
-constant  MASTER_DATA_WIDTH : natural := 32;
+constant  MASTER_DATA_WIDTH : natural := 128;
+--constant  MASTER_DATA_WIDTH : natural := 32;
 constant  LINE_SIZE : natural := 4;
 --constant  LINE_SIZE : natural := 16;
 constant  LINE_SIZE_BYTES : natural := MASTER_DATA_WIDTH/8 * LINE_SIZE;
 constant  LINE_SIZE_WORDS : natural := LINE_SIZE_BYTES / 4;
 constant  CACHE_SIZE : natural :=128;
+--constant  CACHE_SIZE : natural :=2048;
 constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
 
 
@@ -59,9 +65,9 @@ constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
     type t_mstate is (m_idle,m_readburst,m_retire);
     signal mstate : t_mstate:=m_idle;
 
-    subtype t_wbm_dat is std_logic_vector (wbm_dat_i'range);
+    subtype t_wbm_dat is std_logic_vector (wbm_dat_i'high downto wbm_dat_i'low);
 
-     -- our simulated RAM is twiche the cache size, this is enough for write testing...
+     -- our simulated RAM is twice the cache size, this is enough for write testing...
      type t_simul_ram is array (0 to CACHE_SIZE*2-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
 
      signal ram : t_simul_ram := (others=>( others=>'U'));
@@ -136,6 +142,7 @@ begin
       MASTER_DATA_WIDTH => MASTER_DATA_WIDTH,
       LINE_SIZE => LINE_SIZE,
       CACHE_SIZE => CACHE_SIZE
+      --DEVICE_FAMILY => "SPARTAN6"
     )
     port map (clk_i     => clk_i,
               rst_i     => rst_i,
@@ -255,7 +262,7 @@ begin
            wb_read(std_logic_vector(adr),d);
            s:= d = adr;
            if s then
-             report "Sucessfull read from address " & hex_string(adr);
+             print("Sucessfull read from address " & hex_string(adr) & " Data:" & hex_string(d));
            else
              report "Error reading from address " & hex_string(adr) & " Data:" & hex_string(d)
              severity error;
@@ -316,6 +323,49 @@ begin
 
         end procedure;
 
+        procedure wb_read_byte(address : in std_logic_vector(31 downto 0);
+                              dbyte: out std_logic_vector(7 downto 0) )  is
+            begin
+                wait until rising_edge(clk_i);
+                wbs_adr_i <= address(wbs_adr_i'range);
+
+                wbs_we_i <= '0';
+                wbs_cyc_i <= '1';
+                wbs_stb_i <= '1';
+                case address(1 downto 0) is
+                   when "00" =>
+                     wbs_sel_i<="0001";
+                   when "01" =>
+                     wbs_sel_i<="0010";
+                   when "10" =>
+                     wbs_sel_i<="0100";
+                   when "11" =>
+                     wbs_sel_i<="1000";
+                   when others=>
+                     report "Was soll das hier?"
+                     severity error;
+                end case;
+                wait until wbs_ack_o = '1' and rising_edge (clk_i);
+                case address(1 downto 0) is
+                   when "00" =>
+                     dbyte:= wbs_dat_o(7 downto 0);
+                   when "01" =>
+                    dbyte:= wbs_dat_o(15 downto 8);
+                   when "10" =>
+                     dbyte:= wbs_dat_o(23 downto 16);
+                   when "11" =>
+                     dbyte:= wbs_dat_o(31 downto 24);
+                   when others=>
+                     report "Was soll das hier?"
+                     severity error;
+                end case;
+
+                wbs_stb_i <= '0';
+                wbs_cyc_i <= '0';
+
+       end procedure;
+
+
         procedure write_string(s:string;address:std_logic_vector(31 downto 0)) is
         variable adr: unsigned(address'range);
         begin
@@ -326,6 +376,24 @@ begin
             adr:=adr+1;
           end loop;
         end;
+
+        procedure compare_string(s:string;address:std_logic_vector(31 downto 0)) is
+        variable adr: unsigned(address'range);
+        variable byte : std_logic_vector(7 downto 0);
+        --variable s : string(1 to 1);
+
+        begin
+          adr:=unsigned(address);
+          for i in 1 to s'length loop
+            wb_read_byte(std_logic_vector(adr),byte);
+            assert char_to_ascii_byte(s(i)) = byte
+               report "Error in string comparison"
+               severity error;
+            --s(1):=character'val(to_integer(unsigned(c)));
+            adr:=adr+1;
+          end loop;
+        end;
+
 
 
         -- Initalize the complete simul ram over the cache
@@ -342,6 +410,14 @@ begin
 
 
     begin
+       print("bonfire-dcache test bench");
+       print("Test Parameters:");
+       print("MASTER_DATA_WIDTH: " & str(MASTER_DATA_WIDTH));
+       print("LINE_SIZE: " & str(LINE_SIZE) & "* " &  str(MASTER_DATA_WIDTH) & " bits");
+       print("Line Size  " & str(LINE_SIZE_BYTES) & " Bytes ");
+       print("CACHE_SIZE: " & str(CACHE_SIZE) & "* " &  str(MASTER_DATA_WIDTH) & " bits");
+       print("Cache Size " & str(CACHE_SIZE_BYTES) & " Bytes");
+
         -- EDIT Adapt initialization as needed
         rst_i <= '0';
         wbs_cyc_i <= '0';
@@ -352,53 +428,56 @@ begin
         wbs_dat_i <= (others => '0');
 
 
-        -- EDIT Add stimuli here
         wait for 5 * TbPeriod;
 
---         sim_mode<=sim_ram;
---         write_all;
 
---         -- Read the whole RAM areas
---         read_loop(X"00000000",32,s); ---ram'length*(MASTER_DATA_WIDTH/32),s);
 
         -- Do different read test in "pattern" mode, this allows to test in the whole
         -- address range
         sim_mode<=sim_pattern;
-      
-        read_loop(X"00000000",LINE_SIZE_WORDS*2,s); -- read two cache lines
+
+        print("read two cache lines");
+        read_loop(X"00000000",LINE_SIZE_WORDS*2,s);
         assert s report "Test failed" severity failure;
-        read_loop(X"00000000",LINE_SIZE_WORDS*2,s); -- read  the same two cache lines
+        print("OK");
+        print("read  the same two cache lines");
+        read_loop(X"00000000",LINE_SIZE_WORDS*2,s); --
         assert s report "Test failed" severity failure;
-        read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES-LINE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s); -- read  from last line
+        print("OK");
+        print("read from last line of Cache");
+        read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES-LINE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s);
         assert s report "Test failed" severity failure;
-        read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s); -- wrap around, should invalidate line 0
+        print("OK");
+        print("wrap around, should invalidate line 0");
+        read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s); --
         assert s report "Test failed" severity failure;
+        print("OK");
+        print("read from end of address range");
         temp:=X"FFFFFFFF" and not std_logic_vector(to_unsigned(LINE_SIZE_BYTES-1,32));
-        read_loop(std_logic_vector(temp(31 downto 0)),LINE_SIZE_WORDS,s); -- read from end of address range
+        read_loop(std_logic_vector(temp(31 downto 0)),LINE_SIZE_WORDS,s);
         assert s report "Test failed" severity failure;
 
-        report "Read Test finished";
+        print("Read Test finished");
         sim_mode<=sim_ram;
 
-        -- Basic write test
+        print("Basic write test");
         wb_write(X"00000000",X"AABBCCDD");
         wb_read(X"00000000",d);
         if d=X"AABBCCDD" then
-          report "Write successfull";
+          print("Write successfull");
         else
           report "Write error" severity failure;
         end if;
 
-        -- Byte Write Test
+        print("Byte Write Test");
         sim_mode<=sim_ram;
         write_string("The quick brown fox jumps over the lazy dog",X"00000000");
+        compare_string("The quick brown fox jumps over the lazy dog",X"00000000");
 
-
-         --Initalize all (RAM and Cache)
-
+        print("Initalize all (RAM and Cache)");
         write_all;
 
-        -- Read the whole RAM areas
+        print("Read the whole RAM area");
         read_loop(X"00000000",ram'length*(MASTER_DATA_WIDTH/32),s);
         assert s report "Test failed" severity error;
         -- Stop the clock and hence terminate the simulation
@@ -408,4 +487,4 @@ begin
 
 end tb;
 
--- Configuration block below is required by some simulators. Usually no need to edit.
+

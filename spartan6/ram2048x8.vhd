@@ -1,22 +1,22 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date:    13:03:14 10/16/2016 
--- Design Name: 
--- Module Name:    ram2048x8 - Behavioral 
--- Project Name: 
--- Target Devices: 
--- Tool versions: 
--- Description: 
--- 2K*8 Bit RAM with one R/W and one Read-only Port. 
--- Using Xilinx Primitives instead of inference to have more control over BRAM allocation. 
+-- Company:
+-- Engineer:
 --
--- Dependencies: 
+-- Create Date:    13:03:14 10/16/2016
+-- Design Name:
+-- Module Name:    ram2048x8 - Behavioral
+-- Project Name:
+-- Target Devices:
+-- Tool versions:
+-- Description:
+-- 2K*8 Bit Dual Port RAM with "write first" strategy
+-- Using Xilinx Primitives instead of inference to have more control over BRAM allocation.
 --
--- Revision: 
+-- Dependencies:
+--
+-- Revision:
 -- Revision 0.01 - File Created
--- Additional Comments: 
+-- Additional Comments:
 --
 ----------------------------------------------------------------------------------
 library IEEE;
@@ -55,22 +55,22 @@ signal DOPA,DOPB,DIPA,DIPB : std_logic_vector(3 downto 0);
 signal ADDRA,ADDRB : std_logic_vector(13 downto 0);
 signal WEA,WEB : std_logic_vector(3 downto 0);
 
-  
+
 
 begin
 
   DIPA<=(others=>'0');
   DIPB<=(others=>'0');
- 
+
   DIA<= X"000000"&DinA;
   DIB<= X"000000"&DInB;
-  
+
   ADDRA<=AdrA&"000";
   ADDRB<=AdrB&"000";
-  
+
   DOutA<= DOA(7 downto 0);
   DoutB<= DOB(7 downto 0);
-  
+
   wegen: for i in WEA'range generate
       WEA(i)<=WRENA;
       WEB(i)<=WRENB;
@@ -88,21 +88,21 @@ begin
       -- EN_RSTRAM_A/EN_RSTRAM_B: Enable/disable RST
       EN_RSTRAM_A => FALSE,
       EN_RSTRAM_B => FALSE,
-     
+
       -- INIT_A/INIT_B: Initial values on output port
       INIT_A => X"000000000",
       INIT_B => X"000000000",
       -- INIT_FILE: Optional file used to specify initial RAM contents
       INIT_FILE => "NONE",
-    
-      -- SIM_COLLISION_CHECK: Collision check enable "ALL", "WARNING_ONLY", "GENERATE_X_ONLY" or "NONE" 
+
+      -- SIM_COLLISION_CHECK: Collision check enable "ALL", "WARNING_ONLY", "GENERATE_X_ONLY" or "NONE"
       SIM_COLLISION_CHECK => "ALL",
       -- SIM_DEVICE: Must be set to "SPARTAN6" for proper simulation behavior
       SIM_DEVICE => "SPARTAN6",
-   
-      -- WRITE_MODE_A/WRITE_MODE_B: "WRITE_FIRST", "READ_FIRST", or "NO_CHANGE" 
+
+      -- WRITE_MODE_A/WRITE_MODE_B: "WRITE_FIRST", "READ_FIRST", or "NO_CHANGE"
       WRITE_MODE_A => "WRITE_FIRST",
-      WRITE_MODE_B => "WRITE_FIRST" 
+      WRITE_MODE_B => "WRITE_FIRST"
    )
    port map (
       -- Port A Data: 32-bit (each) output: Port A data
@@ -133,11 +133,6 @@ begin
       DIPB => DIPB      -- 4-bit input: B port parity input
    );
 
-
-  
-
-
- 
 
 end Behavioral;
 

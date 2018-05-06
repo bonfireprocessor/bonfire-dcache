@@ -3,16 +3,25 @@ CAPI=1
 name = ::bonfire-dcache:0
 depend = ::bonfire-util:0
 backend = ise
-simulators=isim
-
-[fileset rtl]
-files =  bonfire_dcache_cacheram.vhd bonfire_dcache.vhd
-file_type=vhdlSource
+simulators=isim xsim
 
 [fileset rtl_spartan6]
-files = spartan6/ram2048x8.vhd spartan6/dcache_ram8K_spartan6.vhd
+files = spartan6/ram2048x8.vhd
 file_type=vhdlSource
-#usage=synth
+usage=isim synth xsim
+
+[fileset rtl_spartan6_sim]
+files= spartan6/ram2048x8_sim.vhd
+file_type=vhdlSource
+usage=ghdl
+
+
+[fileset rtl]
+files =  bonfire_dcache_cacheram.vhd
+         spartan6/dcache_ram8K_spartan6.vhd
+         bonfire_dcache.vhd
+file_type=vhdlSource
+
 
 [fileset sim]
 files=./tb_dcache.vhd
@@ -24,6 +33,11 @@ scope = private
 
 [simulator]
 toplevel = tb_dcache
+
+[ghdl]
+analyze_options = --ieee=synopsys -frelaxed-rules
+#run_options = --ieee=synopsys -frelaxed-rules
+
 
 #[provider]
 #name=github
