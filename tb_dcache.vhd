@@ -62,7 +62,7 @@ constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
     signal TbClock : std_logic := '0';
     signal TbSimEnded : std_logic := '0';
 
-    type t_mstate is (m_idle,m_readburst,m_retire);
+    type t_mstate is (m_idle,m_burst);
     signal mstate : t_mstate:=m_idle;
 
     subtype t_wbm_dat is std_logic_vector (wbm_dat_i'high downto wbm_dat_i'low);
@@ -194,30 +194,27 @@ begin
     begin
 
       if rising_edge(clk_i) then
+
+          if wbm_cyc_o='1' and wbm_stb_o='1' and wbm_we_o='1' then
+            for i in wbm_sel_o'range loop
+               if wbm_sel_o(i)='1' then
+                 ram(to_integer(unsigned(wbm_adr_o)))((i+1)*8-1 downto i*8) <= wbm_dat_o((i+1)*8-1 downto i*8);
+               end if;
+             end loop;
+          end if;
+
           case mstate is
             when m_idle =>
               if wbm_cyc_o='1' and wbm_stb_o='1' then
-                if wbm_we_o='0' then
-                  mstate <= m_readburst;
-                else
-                   for i in wbm_sel_o'range loop
-                     if wbm_sel_o(i)='1' then
-                       ram(to_integer(unsigned(wbm_adr_o)))((i+1)*8-1 downto i*8) <= wbm_dat_o((i+1)*8-1 downto i*8);
-                     end if;
-                   end loop;
-                   mstate <= m_retire;
-                end if;
+                mstate <= m_burst;
                 wbm_ack_i <= '1'; -- Set ack signal
               end if;
 
-            when m_readburst =>
+            when m_burst =>
                 if wbm_cti_o="000" or wbm_cti_o="111" then
                   wbm_ack_i<= '0';
                   mstate<=m_idle;
                 end if;
-            when m_retire =>
-               wbm_ack_i<= '0';
-               mstate<=m_idle;
           end case;
       end if;
     end process;
