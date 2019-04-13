@@ -147,18 +147,18 @@ begin
 
 
       if  index_match and tag_match and en_i='1' then
-        hit<='1';
+        hit <= '1';
       else
-        hit<='0';
+        hit <= '0';
       end if;
 
       -- A miss only occurs when the tag buffer contains data for the right index but
       -- the tag itself does not match
       if en_i='1' and index_match and not tag_match then
-        miss<='1';
+        miss <= '1';
         dirty_miss_o <= tag_buffer.dirty;
       else
-        miss<='0';
+        miss <= '0';
         dirty_miss_o <= '0';
       end if;
     end process;
@@ -170,16 +170,16 @@ begin
     begin
       if rising_edge(clk_i) then
         if rst_i='1' then
-           tag_out<=  to_tag_bits(init_tag_data);
+           tag_out <= to_tag_bits(init_tag_data);
         else
            if we_i='1' then
              tag_ram(to_integer(tag_index))<=tag_in;
              tag_out <= tag_in; -- write first RAM...
            else
-             tag_out <=tag_ram(to_integer(tag_index));
+             tag_out <= tag_ram(to_integer(tag_index));
            end if;
         end if;
-        buffer_index<=tag_index;
+        buffer_index <= tag_index;
 
       end if;
 

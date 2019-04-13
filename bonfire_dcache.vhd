@@ -97,44 +97,18 @@ constant CACHEADR_HI : natural  := CACHEADR_LOW+CACHE_ADR_BITS-1;
 constant gen_sp6_special : boolean := DEVICE_FAMILY = spartan6_name and CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32;
 
 
---subtype t_tag_value is unsigned(TAG_RAM_BITS-1 downto 0);
---subtype t_dirty_bits is std_logic_vector(MASTER_WIDTH_BYTES-1 downto 0);
 
---type t_tag_data is record
---   valid : std_logic;
---   dirty : std_logic;
---   address : t_tag_value;
---end record;
 
---constant tag_rec_len:natural:= 1+t_tag_value'length+1;
-
---subtype t_tag_bits is std_logic_vector(tag_rec_len-1 downto 0);
-
---constant init_dirty_bits : t_dirty_bits := (others=>'0');
---constant init_tag_data : t_tag_data := ('0','0',to_unsigned(0,t_tag_value'length));
-
---type t_tag_ram is array (0 to TAG_RAM_SIZE-1) of t_tag_bits;
-----type t_cache_ram is array (0 to CACHE_SIZE-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
-
---signal tag_value : t_tag_value;
-signal tag_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0); -- Offset into TAG RAM
-
---signal tag_ram : t_tag_ram := (others =>(others=> '0')) ;
---attribute ram_style: string; -- for Xilinx
---attribute ram_style of tag_ram: signal is  "distributed"; -- "block";
-
+-- Slave bus
 signal slave_adr : std_logic_vector (wbs_adr_i'range);
 signal wbs_enable : std_logic;
-
-
-signal buffer_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0); -- index of last buffered tag value
-
-
-signal hit,miss : std_logic;
-
 signal slave_rd_ack : std_logic :='0';
-
 signal slave_write_enable : std_logic; -- combinatorial, slave write cycle enabled
+
+-- Tag RAM Interface
+signal tag_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0); -- Offset into TAG RAM
+signal buffer_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0); -- index of last buffered tag value
+signal hit,miss : std_logic;
 signal write_back_enable : std_logic; -- combinatorial, actual tag line must be written back
 
 -- Bus master signals
@@ -175,7 +149,7 @@ signal slave_en_i, master_en_i, master_we_i : std_logic;
 
    end function;
 
- 
+
 begin
 
   assert (DEVICE_FAMILY=spartan6_name and gen_sp6_special) or
@@ -196,6 +170,7 @@ begin
 
 
   -- Wishbone ack signal for cache reads
+  
   proc_slave_rd_ack: process(clk_i) begin
 
     if rising_edge(clk_i) then
@@ -248,6 +223,9 @@ begin
    end generate;
 
 
+ -- Interface to Cache RAM
+
+   slave_en_i <= hit and wbs_enable;
 
    proc_cache_wren:process(wbs_sel_i,slave_adr,wbs_we_i) begin
 
@@ -272,9 +250,7 @@ begin
    end process;
 
 
-  -- Interface to Cache RAM
-
-  slave_en_i <= hit and wbs_enable;
+ 
 
   master_en_i <= '1' when (wbm_ack_i='1' and wbm_enable='1') or
                          (write_back_enable='1' and wbm_state=wb_idle)
