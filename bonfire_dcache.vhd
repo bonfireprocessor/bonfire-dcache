@@ -170,7 +170,7 @@ begin
 
 
   -- Wishbone ack signal for cache reads
-  
+
   proc_slave_rd_ack: process(clk_i) begin
 
     if rising_edge(clk_i) then
@@ -187,31 +187,59 @@ begin
   tag_we <= '1' when (wbm_ack_i='1' and wbm_state=wb_finish) or slave_write_enable = '1' else '0';
   tag_dirty <= slave_write_enable;
   tag_valid <= not write_back_enable;
+  --
+  -- inst_bonfire_dcache_set : entity work.bonfire_dcache_set
+  -- generic map (
+  --   CL_BITS            => CL_BITS,
+  --   CACHE_ADR_BITS     => CACHE_ADR_BITS,
+  --   TAG_RAM_BITS       => TAG_RAM_BITS,
+  --   ADDRESS_BITS       => ADDRESS_BITS,
+  --   MASTER_WIDTH_BYTES => MASTER_WIDTH_BYTES,
+  --   DEVICE_FAMILY      => DEVICE_FAMILY
+  -- )
+  -- port map (
+  --   clk_i   => clk_i,
+  --   rst_i   => rst_i,
+  --   adr_i   => slave_adr,
+  --   en_i    => wbs_enable,
+  --   we_i    => tag_we,
+  --   dirty_i => tag_dirty,
+  --   valid_i => tag_valid,
+  --   tag_index_o => tag_index,
+  --   hit_o   => hit,
+  --   miss_o  => miss,
+  --   dirty_miss_o => write_back_enable,
+  --   tag_value_o => tag_buffer_address,
+  --   buffer_index_o => buffer_index
+  -- );
 
-  inst_bonfire_dcache_set : entity work.bonfire_dcache_set
-  generic map (
-    CL_BITS            => CL_BITS,
-    CACHE_ADR_BITS     => CACHE_ADR_BITS,
-    TAG_RAM_BITS       => TAG_RAM_BITS,
-    ADDRESS_BITS       => ADDRESS_BITS,
-    MASTER_WIDTH_BYTES => MASTER_WIDTH_BYTES,
-    DEVICE_FAMILY      => DEVICE_FAMILY
-  )
-  port map (
-    clk_i   => clk_i,
-    rst_i   => rst_i,
-    adr_i   => slave_adr,
-    en_i    => wbs_enable,
-    we_i    => tag_we,
-    dirty_i => tag_dirty,
-    valid_i => tag_valid,
-    tag_index_o => tag_index,
-    hit_o   => hit,
-    miss_o  => miss,
-    dirty_miss_o => write_back_enable,
-    tag_value_o => tag_buffer_address,
-    buffer_index_o => buffer_index
-  );
+bonfire_dcache_multi_sets_i : entity work.bonfire_dcache_multi_sets
+generic map (
+  LOG2_SETS          => 0,
+  CL_BITS            => CL_BITS,
+  CACHE_ADR_BITS     => CACHE_ADR_BITS,
+  TAG_RAM_BITS       => TAG_RAM_BITS,
+  ADDRESS_BITS       => ADDRESS_BITS,
+  MASTER_WIDTH_BYTES => MASTER_WIDTH_BYTES,
+  DEVICE_FAMILY      => DEVICE_FAMILY
+)
+port map (
+  clk_i   => clk_i,
+  rst_i   => rst_i,
+  adr_i   => slave_adr,
+  en_i    => wbs_enable,
+  we_i    => tag_we,
+  dirty_i => tag_dirty,
+  valid_i => tag_valid,
+  tag_index_o => tag_index,
+  hit_o   => hit,
+  miss_o  => miss,
+  dirty_miss_o => write_back_enable,
+  tag_value_o => tag_buffer_address,
+  buffer_index_o => buffer_index,
+  selected_set_o => open
+);
+
 
 
 
@@ -250,7 +278,7 @@ begin
    end process;
 
 
- 
+
 
   master_en_i <= '1' when (wbm_ack_i='1' and wbm_enable='1') or
                          (write_back_enable='1' and wbm_state=wb_idle)

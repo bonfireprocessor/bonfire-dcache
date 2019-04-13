@@ -45,6 +45,7 @@ Port (
   miss_o : out std_logic;
   dirty_miss_o : out std_logic;
   tag_value_o : out unsigned(TAG_RAM_BITS-1 downto 0);
+  tag_valid_o : out std_logic;
   buffer_index_o : out unsigned(CACHE_ADR_BITS-CL_BITS-1 downto 0)
 
 );
@@ -125,6 +126,7 @@ begin
   hit_o <= hit;
   miss_o <= miss;
   tag_value_o <= tag_buffer.address;
+  tag_valid_o <= tag_buffer.valid;
   buffer_index_o <= buffer_index;
 
 -- Tag assignments

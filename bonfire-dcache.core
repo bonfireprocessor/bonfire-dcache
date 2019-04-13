@@ -17,9 +17,11 @@ usage=ghdl
 
 
 [fileset rtl]
-files =  bonfire_dcache_cacheram.vhd
+files =  bonfire_dcache_help.vhd
+         bonfire_dcache_cacheram.vhd
          spartan6/dcache_ram8K_spartan6.vhd
          bonfire_dcache_set.vhd
+         bonfire_dcache_multi_sets.vhd
          bonfire_dcache.vhd
 
 file_type=vhdlSource

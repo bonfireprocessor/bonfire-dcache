@@ -397,11 +397,16 @@ begin
         -- tests as side effect the write back logic
         procedure write_all is
         variable adr: std_logic_vector(31 downto 0);
+        constant len : natural := ram'length*(MASTER_DATA_WIDTH/32) / 2;
         begin
-          for i in 0 to ram'length*(MASTER_DATA_WIDTH/32) -1 loop
+          for i in 0 to len -1 loop
              adr:=std_logic_vector(to_unsigned(i*4,32));
              wb_write(adr,adr);
           end loop;
+          for i in len to 2*len -1 loop
+              adr:=std_logic_vector(to_unsigned(i*4,32));
+              wb_write(adr,adr);
+           end loop;
         end procedure;
 
 
@@ -478,6 +483,7 @@ begin
         read_loop(X"00000000",ram'length*(MASTER_DATA_WIDTH/32),s);
         assert s report "Test failed" severity error;
         -- Stop the clock and hence terminate the simulation
+        print("Simulation finished");
         TbSimEnded <= '1';
         wait;
     end process;
