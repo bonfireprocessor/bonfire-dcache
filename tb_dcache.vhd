@@ -31,6 +31,9 @@ constant  CACHE_SIZE : natural :=128;
 --constant  CACHE_SIZE : natural :=2048;
 constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
 
+constant NUM_SETS : natural := 2;
+constant DIRECT_MAPPED : boolean := NUM_SETS = 1;
+
 
 
     signal clk_i     : std_logic;
@@ -69,7 +72,6 @@ constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
 
      -- our simulated RAM is twice the cache size, this is enough for write testing...
      type t_simul_ram is array (0 to CACHE_SIZE*2-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
-
      signal ram : t_simul_ram := (others=>( others=>'U'));
 
     -- Testbench can run in pattern mode, for address read tests
@@ -141,7 +143,8 @@ begin
     generic  map (
       MASTER_DATA_WIDTH => MASTER_DATA_WIDTH,
       LINE_SIZE => LINE_SIZE,
-      CACHE_SIZE => CACHE_SIZE
+      CACHE_SIZE => CACHE_SIZE,
+      NUM_SETS => NUM_SETS
       --DEVICE_FAMILY => "SPARTAN6"
     )
     port map (clk_i     => clk_i,
@@ -259,7 +262,7 @@ begin
            wb_read(std_logic_vector(adr),d);
            s:= d = adr;
            if s then
-             print("Sucessfull read from address " & hex_string(adr) & " Data:" & hex_string(d));
+            -- print("Sucessfull read from address " & hex_string(adr) & " Data:" & hex_string(d));
            else
              report "Error reading from address " & hex_string(adr) & " Data:" & hex_string(d)
              severity error;
@@ -419,6 +422,10 @@ begin
        print("Line Size  " & str(LINE_SIZE_BYTES) & " Bytes ");
        print("CACHE_SIZE: " & str(CACHE_SIZE) & "* " &  str(MASTER_DATA_WIDTH) & " bits");
        print("Cache Size " & str(CACHE_SIZE_BYTES) & " Bytes");
+       if not DIRECT_MAPPED then
+         print("Sets: " & str(NUM_SETS));
+         print("Bank Size: " & str(CACHE_SIZE_BYTES/NUM_SETS));
+       end if;
 
         -- EDIT Adapt initialization as needed
         rst_i <= '0';
@@ -447,13 +454,24 @@ begin
         assert s report "Test failed" severity failure;
         print("OK");
         print("read from last line of Cache");
-        read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES-LINE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s);
+        read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS-LINE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s);
         assert s report "Test failed" severity failure;
         print("OK");
-        print("wrap around, should invalidate line 0");
-        read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s); --
-        assert s report "Test failed" severity failure;
-        print("OK");
+        if not DIRECT_MAPPED then
+          print("Test for set associative cache");
+          for i in  1 to NUM_SETS+1 loop
+            print("Loop:" & str(i) & " @ " & integer'image( now / 1 ns) & " ns");
+            read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS * i ,32)),LINE_SIZE_WORDS,s);
+            assert s report "Test failed" severity failure;
+          end loop;
+          print("OK");
+        else
+          print("wrap around, should invalidate line 0");
+          read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s);
+          assert s report "Test failed" severity failure;
+          print("OK");
+        end if;
+
         print("read from end of address range");
         temp:=X"FFFFFFFF" and not std_logic_vector(to_unsigned(LINE_SIZE_BYTES-1,32));
         read_loop(std_logic_vector(temp(31 downto 0)),LINE_SIZE_WORDS,s);
@@ -475,7 +493,18 @@ begin
         sim_mode<=sim_ram;
         write_string("The quick brown fox jumps over the lazy dog",X"00000000");
         compare_string("The quick brown fox jumps over the lazy dog",X"00000000");
-
+        if not DIRECT_MAPPED then
+          print("Write test for set associative cache");
+          for i in 0 to NUM_SETS+1 Loop
+            temp := std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS * i ,32 ));
+            print("Testing address " & hex_string(temp) & " @ " & integer'image( now / 1 ns) & " ns");
+            wb_write(temp,X"AA" & temp(23 downto 0));
+            wb_read(temp,d);
+            assert d= (X"AA" & temp(23 downto 0))
+              report "Set test write error on address: " & hex_string(temp)
+              severity error;
+           end loop;
+        end if;
         print("Initalize all (RAM and Cache)");
         write_all;
 
@@ -489,5 +518,3 @@ begin
     end process;
 
 end tb;
-
-

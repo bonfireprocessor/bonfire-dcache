@@ -1,22 +1,28 @@
 [*]
 [*] GTKWave Analyzer v3.3.66 (w)1999-2015 BSI
-[*] Sat Apr 13 16:05:31 2019
+[*] Sun Apr 14 19:15:02 2019
 [*]
 [dumpfile] "/home/thomas/development/fusesoc_build/vivado2018.2.3/bonfire-dcache_0/sim-ghdl/dcache.ghw"
-[dumpfile_mtime] "Sat Apr 13 16:02:17 2019"
-[dumpfile_size] 862038
+[dumpfile_mtime] "Sun Apr 14 19:14:27 2019"
+[dumpfile_size] 934846
 [savefile] "/home/thomas/development/bonfire/bonfire-dcache/waveform.gtkw"
 [timestart] 0
 [size] 1680 1025
 [pos] -1 -1
-*-26.000000 88700000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-27.000000 21944900000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] top.
 [treeopen] top.tb_dcache.
 [treeopen] top.tb_dcache.dut.
+[treeopen] top.tb_dcache.dut.sa.
+[treeopen] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.
+[treeopen] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.gensets[0].inst_bonfire_dcache_set.
+[treeopen] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.gensets[1].inst_bonfire_dcache_set.
+[treeopen] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets.[0].
+[treeopen] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets.[1].
 [sst_width] 376
-[signals_width] 238
+[signals_width] 334
 [sst_expanded] 1
-[sst_vpaned_height] 636
+[sst_vpaned_height] 597
 @28
 top.tb_dcache.dut.clk_i
 top.tb_dcache.dut.wbs_cyc_i
@@ -39,7 +45,7 @@ top.tb_dcache.dut.wbs_ack_o
 top.tb_dcache.dut.wbm_cyc_o
 top.tb_dcache.dut.wbm_stb_o
 top.tb_dcache.dut.wbm_we_o
-@23
+@22
 #{top.tb_dcache.dut.wbm_adr_o[31:4]} top.tb_dcache.dut.wbm_adr_o[31] top.tb_dcache.dut.wbm_adr_o[30] top.tb_dcache.dut.wbm_adr_o[29] top.tb_dcache.dut.wbm_adr_o[28] top.tb_dcache.dut.wbm_adr_o[27] top.tb_dcache.dut.wbm_adr_o[26] top.tb_dcache.dut.wbm_adr_o[25] top.tb_dcache.dut.wbm_adr_o[24] top.tb_dcache.dut.wbm_adr_o[23] top.tb_dcache.dut.wbm_adr_o[22] top.tb_dcache.dut.wbm_adr_o[21] top.tb_dcache.dut.wbm_adr_o[20] top.tb_dcache.dut.wbm_adr_o[19] top.tb_dcache.dut.wbm_adr_o[18] top.tb_dcache.dut.wbm_adr_o[17] top.tb_dcache.dut.wbm_adr_o[16] top.tb_dcache.dut.wbm_adr_o[15] top.tb_dcache.dut.wbm_adr_o[14] top.tb_dcache.dut.wbm_adr_o[13] top.tb_dcache.dut.wbm_adr_o[12] top.tb_dcache.dut.wbm_adr_o[11] top.tb_dcache.dut.wbm_adr_o[10] top.tb_dcache.dut.wbm_adr_o[9] top.tb_dcache.dut.wbm_adr_o[8] top.tb_dcache.dut.wbm_adr_o[7] top.tb_dcache.dut.wbm_adr_o[6] top.tb_dcache.dut.wbm_adr_o[5] top.tb_dcache.dut.wbm_adr_o[4]
 @28
 #{top.tb_dcache.wbm_sel_o[15:0]} top.tb_dcache.wbm_sel_o[15] top.tb_dcache.wbm_sel_o[14] top.tb_dcache.wbm_sel_o[13] top.tb_dcache.wbm_sel_o[12] top.tb_dcache.wbm_sel_o[11] top.tb_dcache.wbm_sel_o[10] top.tb_dcache.wbm_sel_o[9] top.tb_dcache.wbm_sel_o[8] top.tb_dcache.wbm_sel_o[7] top.tb_dcache.wbm_sel_o[6] top.tb_dcache.wbm_sel_o[5] top.tb_dcache.wbm_sel_o[4] top.tb_dcache.wbm_sel_o[3] top.tb_dcache.wbm_sel_o[2] top.tb_dcache.wbm_sel_o[1] top.tb_dcache.wbm_sel_o[0]
@@ -58,5 +64,19 @@ top.tb_dcache.dut.wbm_ack_i
 top.tb_dcache.dut.miss
 top.tb_dcache.dut.hit
 top.tb_dcache.dut.wbm_state
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.selected_set_o[0]
+@22
+#{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[3:0]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[3] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[2] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[1] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[0]
+@28
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.dirty_miss_o
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.miss_o
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.hit_o
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.valid_i
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.dirty_i
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.we_i
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.en_i
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.selected_set_index
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.gensets[1].inst_bonfire_dcache_set.hit_o
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.gensets[0].inst_bonfire_dcache_set.hit_o
 [pattern_trace] 1
 [pattern_trace] 0

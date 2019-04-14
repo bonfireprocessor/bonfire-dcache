@@ -18,6 +18,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 use work.log2;
+use work.bonfire_dcache_help.all;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx leaf cells in this code.
@@ -30,7 +31,8 @@ generic(
   LINE_SIZE : natural :=4; -- Line size in MASTER_DATA_WIDTH  words
   CACHE_SIZE : natural :=2048; -- Cache Size in MASTER_DATA_WIDTH Bit words
   ADDRESS_BITS : natural := 30;  -- Number of bits of chacheable address range
-  DEVICE_FAMILY : string :=""
+  DEVICE_FAMILY : string :="";
+  NUM_SETS : natural := 1 -- Number of Cache Sets
 );
 Port (
    clk_i: in std_logic;
@@ -71,9 +73,12 @@ architecture Behavioral of bonfire_dcache is
 
 constant spartan6_name : string := "SPARTAN6";
 
-constant  WORD_SELECT_BITS : natural := log2.log2(MASTER_DATA_WIDTH/32);
+constant WORD_SELECT_BITS : natural := log2.log2(MASTER_DATA_WIDTH/32);
 constant CL_BITS : natural :=log2.log2(LINE_SIZE); -- Bits for adressing a word in a cache line
-constant CACHE_ADR_BITS : natural := log2.log2(CACHE_SIZE); -- total adress bits for cache
+constant SET_ADR_BITS : natural := log2.log2(NUM_SETS);
+constant DIRECT_MAPPED : boolean := NUM_SETS = 1;
+constant CACHE_ADR_BITS : natural := log2.log2(CACHE_SIZE) - SET_ADR_BITS; -- total adress bits for cache
+
 constant LINE_SELECT_ADR_BITS : natural := CACHE_ADR_BITS-CL_BITS; -- adr bits for selecting a cache line
 constant TAG_RAM_SIZE : natural := log2.power2(LINE_SELECT_ADR_BITS); -- the Tag RAM size is defined by the size of line select address
 constant TAG_RAM_BITS: natural := ADDRESS_BITS-LINE_SELECT_ADR_BITS-CL_BITS-WORD_SELECT_BITS;
@@ -95,9 +100,6 @@ constant CACHEADR_HI : natural  := CACHEADR_LOW+CACHE_ADR_BITS-1;
 
 -- Generation options
 constant gen_sp6_special : boolean := DEVICE_FAMILY = spartan6_name and CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32;
-
-
-
 
 -- Slave bus
 signal slave_adr : std_logic_vector (wbs_adr_i'range);
@@ -131,10 +133,19 @@ signal tag_buffer_address : unsigned(TAG_RAM_BITS-1 downto 0);
 
 
 -- Cache RAM Interface
-signal cache_AdrBus : std_logic_vector(CACHE_ADR_BITS-1 downto 0);
+subtype t_cacheadr is std_logic_vector(CACHE_ADR_BITS+SET_ADR_BITS-1 downto 0);
+
+signal cache_AdrBus : t_cacheadr;
 signal cache_DBOut,cache_DBIn : std_logic_vector (MASTER_DATA_WIDTH-1 downto 0);
 signal cache_wren : std_logic_vector (MASTER_WIDTH_BYTES-1 downto 0);
 signal slave_en_i, master_en_i, master_we_i : std_logic;
+signal slave_cache_adr : t_cacheadr;
+
+-- Set associative cache
+subtype t_setselector is std_logic_vector(max(SET_ADR_BITS-1,0) downto 0);
+signal selected_set : t_setselector;
+signal slave_set : t_setselector;
+signal master_set : t_setselector;
 
 
    function is_sel(adr: std_logic_vector (slave_adr'range);mux:natural) return boolean is
@@ -156,9 +167,6 @@ begin
          (DEVICE_FAMILY /= spartan6_name )
   report "Module bonfire_dcache: On Spartan 6 generic synthesis of Cache RAM will most likely fail, use only CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32 for a hard coded work around"
   severity warning;
-
-
-
 
 
   slave_adr <= wbs_adr_i; -- currently only an alias...
@@ -187,35 +195,49 @@ begin
   tag_we <= '1' when (wbm_ack_i='1' and wbm_state=wb_finish) or slave_write_enable = '1' else '0';
   tag_dirty <= slave_write_enable;
   tag_valid <= not write_back_enable;
-  --
-  -- inst_bonfire_dcache_set : entity work.bonfire_dcache_set
-  -- generic map (
-  --   CL_BITS            => CL_BITS,
-  --   CACHE_ADR_BITS     => CACHE_ADR_BITS,
-  --   TAG_RAM_BITS       => TAG_RAM_BITS,
-  --   ADDRESS_BITS       => ADDRESS_BITS,
-  --   MASTER_WIDTH_BYTES => MASTER_WIDTH_BYTES,
-  --   DEVICE_FAMILY      => DEVICE_FAMILY
-  -- )
-  -- port map (
-  --   clk_i   => clk_i,
-  --   rst_i   => rst_i,
-  --   adr_i   => slave_adr,
-  --   en_i    => wbs_enable,
-  --   we_i    => tag_we,
-  --   dirty_i => tag_dirty,
-  --   valid_i => tag_valid,
-  --   tag_index_o => tag_index,
-  --   hit_o   => hit,
-  --   miss_o  => miss,
-  --   dirty_miss_o => write_back_enable,
-  --   tag_value_o => tag_buffer_address,
-  --   buffer_index_o => buffer_index
-  -- );
 
+  dm: if DIRECT_MAPPED generate
+
+  inst_bonfire_dcache_set : entity work.bonfire_dcache_set
+  generic map (
+    CL_BITS            => CL_BITS,
+    CACHE_ADR_BITS     => CACHE_ADR_BITS,
+    TAG_RAM_BITS       => TAG_RAM_BITS,
+    ADDRESS_BITS       => ADDRESS_BITS,
+    MASTER_WIDTH_BYTES => MASTER_WIDTH_BYTES,
+    DEVICE_FAMILY      => DEVICE_FAMILY
+  )
+  port map (
+    clk_i   => clk_i,
+    rst_i   => rst_i,
+    adr_i   => slave_adr,
+    en_i    => wbs_enable,
+    we_i    => tag_we,
+    dirty_i => tag_dirty,
+    valid_i => tag_valid,
+    tag_index_o => tag_index,
+    hit_o   => hit,
+    miss_o  => miss,
+    dirty_miss_o => write_back_enable,
+    tag_value_o => tag_buffer_address,
+    buffer_index_o => buffer_index
+  );
+
+
+slave_cache_adr <= slave_adr(CACHEADR_HI  downto CACHEADR_LOW);
+
+cache_AdrBus<= std_logic_vector(buffer_index) &
+               std_logic_vector (cache_offset_counter) when write_back_enable='1'  else
+
+               std_logic_vector(tag_index) & std_logic_vector(master_offset_counter);
+
+end generate;
+
+
+sa: if not DIRECT_MAPPED  generate
 bonfire_dcache_multi_sets_i : entity work.bonfire_dcache_multi_sets
 generic map (
-  LOG2_SETS          => 0,
+  LOG2_SETS          => SET_ADR_BITS,
   CL_BITS            => CL_BITS,
   CACHE_ADR_BITS     => CACHE_ADR_BITS,
   TAG_RAM_BITS       => TAG_RAM_BITS,
@@ -237,9 +259,22 @@ port map (
   dirty_miss_o => write_back_enable,
   tag_value_o => tag_buffer_address,
   buffer_index_o => buffer_index,
-  selected_set_o => open
+  selected_set_o => selected_set
 );
 
+
+slave_set <= selected_set;
+master_set <= selected_set;
+
+slave_cache_adr <= slave_set & slave_adr(CACHEADR_HI  downto CACHEADR_LOW);
+
+cache_AdrBus<= master_set &
+               std_logic_vector(buffer_index) &
+               std_logic_vector (cache_offset_counter) when write_back_enable='1'  else
+
+               master_set &  std_logic_vector(tag_index) & std_logic_vector(master_offset_counter);
+
+end generate;
 
 
 
@@ -270,6 +305,7 @@ port map (
 
    proc_cache_rdmux:process(cache_DBOut,slave_adr) begin
   -- Databus Multiplexer, select the 32 Bit word from the cache ram word.
+     wbs_dat_o <= (others => 'X');
      for i in 0 to MUX_SIZE-1 loop
        if is_sel(slave_adr,i) then
          wbs_dat_o <= cache_DBOut((i+1)*32-1 downto i*32);
@@ -286,14 +322,8 @@ port map (
 
   master_we_i <= wbm_ack_i and  not write_back_enable;
 
-  cache_AdrBus<= std_logic_vector(buffer_index) &
-                 std_logic_vector (cache_offset_counter) when write_back_enable='1'  else
-
-                 std_logic_vector(tag_index) & std_logic_vector(master_offset_counter);
-
 
   cache_ram_generic: if not gen_sp6_special generate
-
 
   Inst_bonfire_dcache_cacheram: entity work.bonfire_dcache_cacheram
   GENERIC MAP (
@@ -307,7 +337,7 @@ port map (
       slave_db_o => cache_DBOut,
       slave_wren_i => cache_wren,
       slave_en_i => slave_en_i ,
-      slave_adr_i => slave_adr(CACHEADR_HI  downto CACHEADR_LOW),
+      slave_adr_i => slave_cache_adr,
       master_db_i => wbm_dat_i,
       master_db_o => cache_ram_out,
       master_we_i => master_we_i,
@@ -333,7 +363,7 @@ cache_ram_spartan6: if gen_sp6_special generate
       slave_db_o => cache_DBOut,
       slave_wren_i => cache_wren,
       slave_en_i => slave_en_i ,
-      slave_adr_i => slave_adr(CACHEADR_HI  downto CACHEADR_LOW),
+      slave_adr_i => slave_cache_adr,
       master_db_i => wbm_dat_i,
       master_db_o => cache_ram_out,
       master_we_i => master_we_i,
