@@ -70,8 +70,8 @@ constant DIRECT_MAPPED : boolean := NUM_SETS = 1;
 
     subtype t_wbm_dat is std_logic_vector (wbm_dat_i'high downto wbm_dat_i'low);
 
-     -- our simulated RAM is twice the cache size, this is enough for write testing...
-     type t_simul_ram is array (0 to CACHE_SIZE*2-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
+     -- our simulated RAM is three times the cache size, this is enough for write testing...
+     type t_simul_ram is array (0 to CACHE_SIZE*4-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
      signal ram : t_simul_ram := (others=>( others=>'U'));
 
     -- Testbench can run in pattern mode, for address read tests
@@ -137,6 +137,11 @@ constant DIRECT_MAPPED : boolean := NUM_SETS = 1;
         return s(i downto 1);
     end function;
 
+    procedure print_t( s:string ) is
+    begin
+      print(s &  " @ " & integer'image( now / 1 ns) & " ns" );
+    end;
+
 begin
 
     dut : entity work.bonfire_dcache
@@ -182,6 +187,9 @@ begin
          if sim_mode=sim_pattern then
            wbm_dat_i <= get_pattern(wbm_adr_o);
          else
+           assert unsigned(wbm_adr_o)<= ram'high
+              report " Out of bounds RAM access at address: " & hex_string(wbm_adr_o) &  " @ " & integer'image( now / 1 ns) & " ns"
+              severity failure;
            wbm_dat_i <= ram(to_integer(unsigned(wbm_adr_o)));
          end if;
        else
@@ -424,8 +432,9 @@ begin
        print("Cache Size " & str(CACHE_SIZE_BYTES) & " Bytes");
        if not DIRECT_MAPPED then
          print("Sets: " & str(NUM_SETS));
-         print("Bank Size: " & str(CACHE_SIZE_BYTES/NUM_SETS));
+         print("Bank Size: " & str(CACHE_SIZE_BYTES/NUM_SETS) & " Bytes");
        end if;
+       print("Test RAM size: " & str(ram'length));
 
         -- EDIT Adapt initialization as needed
         rst_i <= '0';
@@ -445,34 +454,34 @@ begin
         -- address range
         sim_mode<=sim_pattern;
 
-        print("read two cache lines");
+        print_t("read two cache lines");
         read_loop(X"00000000",LINE_SIZE_WORDS*2,s);
         assert s report "Test failed" severity failure;
         print("OK");
-        print("read  the same two cache lines");
+        print_t("read  the same two cache lines");
         read_loop(X"00000000",LINE_SIZE_WORDS*2,s); --
         assert s report "Test failed" severity failure;
         print("OK");
-        print("read from last line of Cache");
+        print_t("read from last line of Cache");
         read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS-LINE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s);
         assert s report "Test failed" severity failure;
         print("OK");
         if not DIRECT_MAPPED then
           print("Test for set associative cache");
           for i in  1 to NUM_SETS+1 loop
-            print("Loop:" & str(i) & " @ " & integer'image( now / 1 ns) & " ns");
+            print_t("Loop:" & str(i));
             read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS * i ,32)),LINE_SIZE_WORDS,s);
             assert s report "Test failed" severity failure;
           end loop;
           print("OK");
         else
-          print("wrap around, should invalidate line 0");
+          print_t("wrap around, should invalidate line 0");
           read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s);
           assert s report "Test failed" severity failure;
           print("OK");
         end if;
 
-        print("read from end of address range");
+        print_t("read from end of address range");
         temp:=X"FFFFFFFF" and not std_logic_vector(to_unsigned(LINE_SIZE_BYTES-1,32));
         read_loop(std_logic_vector(temp(31 downto 0)),LINE_SIZE_WORDS,s);
         assert s report "Test failed" severity failure;
@@ -480,7 +489,7 @@ begin
         print("Read Test finished");
         sim_mode<=sim_ram;
 
-        print("Basic write test");
+        print_t("Basic write test");
         wb_write(X"00000000",X"AABBCCDD");
         wb_read(X"00000000",d);
         if d=X"AABBCCDD" then
@@ -489,13 +498,13 @@ begin
           report "Write error" severity failure;
         end if;
 
-        print("Byte Write Test");
+        print_t("Byte Write Test");
         sim_mode<=sim_ram;
         write_string("The quick brown fox jumps over the lazy dog",X"00000000");
         compare_string("The quick brown fox jumps over the lazy dog",X"00000000");
         if not DIRECT_MAPPED then
           print("Write test for set associative cache");
-          for i in 0 to NUM_SETS+1 Loop
+          for i in 0 to NUM_SETS*2+1 Loop
             temp := std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS * i ,32 ));
             print("Testing address " & hex_string(temp) & " @ " & integer'image( now / 1 ns) & " ns");
             wb_write(temp,X"AA" & temp(23 downto 0));
@@ -505,10 +514,10 @@ begin
               severity error;
            end loop;
         end if;
-        print("Initalize all (RAM and Cache)");
+        print_t("Initalize all (RAM and Cache)");
         write_all;
 
-        print("Read the whole RAM area");
+        print_t("Read the whole RAM area");
         read_loop(X"00000000",ram'length*(MASTER_DATA_WIDTH/32),s);
         assert s report "Test failed" severity error;
         -- Stop the clock and hence terminate the simulation

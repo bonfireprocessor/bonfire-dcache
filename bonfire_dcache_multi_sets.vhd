@@ -80,12 +80,11 @@ type  t_sets is array( 0 to NUM_SETS-1 ) of t_set_interface;
 subtype t_setindex is natural range 0 to NUM_SETS-1;
 
 signal sets : t_sets;
-
 signal selected_set_index : t_setindex;
-
 signal round_robin : unsigned(max(LOG2_SETS-1,0) downto 0) := ( others=> '0');
-
 signal we : std_logic_vector( 0 to NUM_SETS-1 );
+signal dirty_miss : std_logic;
+signal purge : std_logic; -- Valid cache line has been purged
 
 
 --signal hit : std_logic;
@@ -95,8 +94,8 @@ begin
   buffer_index_o <= sets(0).buffer_index_o; -- all buffer indexes are identical...
   tag_index_o <= sets(0).tag_index_o;
   tag_value_o <= sets(selected_set_index).tag_value_o;
+  dirty_miss_o <= dirty_miss;
 
--- hit_o <= hit;
 
   gensets: for i in sets'range generate
     inst_bonfire_dcache_set : entity work.bonfire_dcache_set
@@ -147,7 +146,7 @@ begin
 
 
 
-  find_set : process (adr_i,en_i,sets)
+  find_set : process (en_i,sets,round_robin)
   variable hit : std_logic;
   variable selected_set : natural;
   variable found : boolean;
@@ -155,14 +154,14 @@ begin
   begin
     hit := '0';
     miss_o <= '0';
-    dirty_miss_o  <= '0';
+    dirty_miss  <= '0';
+    purge <= '0';
+    selected_set := 0;
     if en_i='1' then
       for i in sets'range loop
         if sets(i).hit_o = '1' then
           hit := '1';
           selected_set := i;
-          miss_o <= '0';
-          dirty_miss_o <= '0';
           exit;
         end if;
       end loop;
@@ -173,17 +172,18 @@ begin
             -- found "free" cache line
             selected_set := i;
             miss_o <= '1';
-            dirty_miss_o <= '0';
             found := true;
+            exit;
           end if;
         end loop;
         if not found then -- no free cache line
            if NUM_SETS>1 then
              selected_set := to_integer(round_robin);
+             purge <= '1';
            end if;
 
            miss_o <= '1';
-           dirty_miss_o <= sets(selected_set).dirty_miss_o;
+           dirty_miss <= sets(selected_set).dirty_miss_o;
         end if;
       end if;
     end if;
@@ -200,7 +200,7 @@ multi_sets: if NUM_SETS>=1 generate  begin
   begin
 
     if rising_edge(clk_i) then
-      if we_i = '1' then
+      if we_i = '1' and purge = '1'  then
         round_robin <= round_robin + 1;
       end if;
     end if;
