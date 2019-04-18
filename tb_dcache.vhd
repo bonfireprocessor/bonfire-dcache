@@ -33,6 +33,7 @@ constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
 
 constant NUM_SETS : natural := 2;
 constant DIRECT_MAPPED : boolean := NUM_SETS = 1;
+constant FULL_SCAN : boolean := false;
 
 
 
@@ -514,12 +515,14 @@ begin
               severity error;
            end loop;
         end if;
-        print_t("Initalize all (RAM and Cache)");
-        write_all;
+        if FULL_SCAN then
+          print_t("Initalize all (RAM and Cache)");
+          write_all;
 
-        print_t("Read the whole RAM area");
-        read_loop(X"00000000",ram'length*(MASTER_DATA_WIDTH/32),s);
-        assert s report "Test failed" severity error;
+          print_t("Read the whole RAM area");
+          read_loop(X"00000000",ram'length*(MASTER_DATA_WIDTH/32),s);
+          assert s report "Test failed" severity error;
+        end if;
         -- Stop the clock and hence terminate the simulation
         print("Simulation finished");
         TbSimEnded <= '1';

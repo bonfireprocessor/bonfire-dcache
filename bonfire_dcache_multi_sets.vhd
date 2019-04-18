@@ -57,13 +57,15 @@ end entity;
 
 architecture Behavioral of bonfire_dcache_multi_sets is
 
-constant NUM_SETS : natural := 2** LOG2_SETS;
+--attribute keep_hierarchy : string;
+--attribute keep_hierarchy of Behavioral: architecture is "yes";
+
+
+constant NUM_SETS : natural := 2 ** LOG2_SETS;
+constant LINE_SELECT_ADR_BITS : natural := CACHE_ADR_BITS-CL_BITS; -- adr bits for selecting a cache line
+constant TAG_RAM_SIZE : natural := 2 ** LINE_SELECT_ADR_BITS; -- the Tag RAM size is defined by the size of line select address
 
 type t_set_interface is record
-
---  we_i :  std_logic; -- Tag RAM write enable (update...)
---  dirty_i :  std_logic;
---  valid_i :  std_logic;
 
   tag_index_o :  unsigned(CACHE_ADR_BITS-CL_BITS-1 downto 0);
   hit_o :  std_logic;
@@ -76,25 +78,49 @@ type t_set_interface is record
 end record;
 
 type  t_sets is array( 0 to NUM_SETS-1 ) of t_set_interface;
-
 subtype t_setindex is natural range 0 to NUM_SETS-1;
 
+subtype t_clockbits is std_logic_vector(NUM_SETS-1 downto 0);
+type t_clockram is array (0 to TAG_RAM_SIZE-1 ) of t_clockbits;
+
+
+
 signal sets : t_sets;
-signal selected_set_index : t_setindex;
+signal selected_set_index, hit_set : t_setindex;
 signal round_robin : unsigned(max(LOG2_SETS-1,0) downto 0) := ( others=> '0');
 signal we : std_logic_vector( 0 to NUM_SETS-1 );
 signal dirty_miss : std_logic;
-signal purge : std_logic; -- Valid cache line has been purged
+signal hit : std_logic;
+signal miss : std_logic;
+signal purge : std_logic; -- Valid cache line must be purged
+signal buffer_index, tag_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0);
+
+-- LRU algorihtm signals
+signal clock_ram : t_clockram := (others =>(others=> '0'));
+attribute ram_style: string; -- for Xilinx
+attribute ram_style of clock_ram: signal is  "distributed"; -- "block";
+signal clock : t_clockbits := (others=> '0');
+
+signal next_clock : t_clockbits;
+signal clock_hand : t_setindex := 0;
+signal purge_set : t_setindex := 0;
+signal purge_found : std_logic := '0';
 
 
---signal hit : std_logic;
 
 begin
 
-  buffer_index_o <= sets(0).buffer_index_o; -- all buffer indexes are identical...
-  tag_index_o <= sets(0).tag_index_o;
+  buffer_index <= sets(0).buffer_index_o; -- all buffer indexes are identical...
+  buffer_index_o <= buffer_index;
+  tag_index <= sets(0).tag_index_o;
+  tag_index_o <= tag_index;
+  selected_set_index <= purge_set when purge_found='1' else hit_set;
+  miss_o <= purge_found;
   tag_value_o <= sets(selected_set_index).tag_value_o;
+  dirty_miss <= sets(selected_set_index).dirty_miss_o;
   dirty_miss_o <= dirty_miss;
+
+  hit_o <= hit;
 
 
   gensets: for i in sets'range generate
@@ -144,51 +170,52 @@ begin
   end process;
 
 
-
-
+-- hit/mis logic and set selector
   find_set : process (en_i,sets,round_robin)
-  variable hit : std_logic;
-  variable selected_set : natural;
+  variable h : std_logic;
+  --variable selected_set : natural;
   variable found : boolean;
 
   begin
-    hit := '0';
-    miss_o <= '0';
-    dirty_miss  <= '0';
+    h := '0';
+--    selected_set := 0;
+    --next_clock <= clock;
+
     purge <= '0';
-    selected_set := 0;
     if en_i='1' then
       for i in sets'range loop
         if sets(i).hit_o = '1' then
-          hit := '1';
-          selected_set := i;
+          h := '1';
+          hit_set <= i;
           exit;
         end if;
       end loop;
-      if hit = '0' and  sets(0).miss_o = '1' then
-        found := false;
-        for i in sets'range loop
-          if sets(i).tag_valid_o = '0' then
-            -- found "free" cache line
-            selected_set := i;
-            miss_o <= '1';
-            found := true;
-            exit;
-          end if;
-        end loop;
-        if not found then -- no free cache line
-           if NUM_SETS>1 then
-             selected_set := to_integer(round_robin);
-             purge <= '1';
-           end if;
+      if h = '0' and  sets(0).miss_o = '1' then
+         purge <= '1';
+        -- found := false;
+        -- for i in sets'range loop
+        --   if sets(i).tag_valid_o = '0' then
+        --     -- found "free" cache line
+        --     selected_set := i;
+        --     miss <= '1';
+        --     found := true;
+        --     exit;
+        --   end if;
+        -- end loop;
+        -- if not found then -- no free cache line
+        --    if NUM_SETS>1 then
+        --      --selected_set := to_integer(round_robin);
+        --      purge <= '1';
+        --      miss <= '1';
+        --    end if;
 
-           miss_o <= '1';
-           dirty_miss <= sets(selected_set).dirty_miss_o;
-        end if;
+          -- miss_o <= '1';
+
+        --end if;
       end if;
     end if;
-    selected_set_index <= selected_set;
-    hit_o <= hit;
+    --selected_set_index <= selected_set;
+    hit <= h;
   end process;
 
 
@@ -196,17 +223,61 @@ multi_sets: if NUM_SETS>=1 generate  begin
 
   selected_set_o <= std_logic_vector(to_unsigned(selected_set_index,selected_set_o'length));
 
-  process (clk_i)
+  p_next_clock_comb: process(en_i,hit,selected_set_index,purge,purge_found,clock_hand)
+
   begin
 
-    if rising_edge(clk_i) then
-      if we_i = '1' and purge = '1'  then
-        round_robin <= round_robin + 1;
+    next_clock <= clock;
+     if en_i= '1' then
+       if hit='1' then
+          next_clock(selected_set_index) <= '1';
+      elsif purge ='1' and purge_found = '0' and clock(clock_hand) = '1' then
+          next_clock(clock_hand) <= '0';
       end if;
     end if;
 
   end process;
 
+
+  p_clock_hand : process(clk_i)
+  begin
+    if rising_edge(clk_i) then
+      if we_i = '1' then
+        purge_found <= '0';
+      elsif en_i= '1' then
+        if purge ='1' and purge_found = '0' then
+          if clock(clock_hand) = '0' then
+             purge_found <= '1';
+             purge_set <= clock_hand;
+           else
+             clock_hand <= (clock_hand + 1 ) mod NUM_SETS;
+           end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+
+  p_clock_ram: process (clk_i)
+  variable t : std_logic;
+  begin
+
+    if rising_edge(clk_i) then
+      if hit = '1' or purge = '1' then
+         clock_ram(to_integer(buffer_index)) <= next_clock;
+         clock <= next_clock;
+      else
+        clock <= clock_ram(to_integer(buffer_index));
+      end if;
+
+      -- if we_i = '1' and purge = '1'  then
+      --   round_robin <= round_robin + 1;
+      -- end if;
+    end if;
+
+  end process;
+
 end generate;
+
 
 end Behavioral;
