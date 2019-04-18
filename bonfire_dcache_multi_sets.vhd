@@ -178,9 +178,7 @@ begin
 
   begin
     h := '0';
---    selected_set := 0;
-    --next_clock <= clock;
-
+    hit_set <= 0;
     purge <= '0';
     if en_i='1' then
       for i in sets'range loop
@@ -192,29 +190,9 @@ begin
       end loop;
       if h = '0' and  sets(0).miss_o = '1' then
          purge <= '1';
-        -- found := false;
-        -- for i in sets'range loop
-        --   if sets(i).tag_valid_o = '0' then
-        --     -- found "free" cache line
-        --     selected_set := i;
-        --     miss <= '1';
-        --     found := true;
-        --     exit;
-        --   end if;
-        -- end loop;
-        -- if not found then -- no free cache line
-        --    if NUM_SETS>1 then
-        --      --selected_set := to_integer(round_robin);
-        --      purge <= '1';
-        --      miss <= '1';
-        --    end if;
-
-          -- miss_o <= '1';
-
-        --end if;
       end if;
     end if;
-    --selected_set_index <= selected_set;
+
     hit <= h;
   end process;
 
@@ -222,6 +200,11 @@ begin
 multi_sets: if NUM_SETS>=1 generate  begin
 
   selected_set_o <= std_logic_vector(to_unsigned(selected_set_index,selected_set_o'length));
+
+  purge_found <= '1' when purge = '1' and clock(clock_hand) ='0'
+                  else '0';
+
+  purge_set <= clock_hand;
 
   p_next_clock_comb: process(en_i,hit,selected_set_index,purge,purge_found,clock_hand)
 
@@ -242,17 +225,17 @@ multi_sets: if NUM_SETS>=1 generate  begin
   p_clock_hand : process(clk_i)
   begin
     if rising_edge(clk_i) then
-      if we_i = '1' then
-        purge_found <= '0';
-      elsif en_i= '1' then
+      --if we_i = '1' then
+      --  purge_found <= '0';
+  --    if en_i= '1' then
         if purge ='1' and purge_found = '0' then
-          if clock(clock_hand) = '0' then
-             purge_found <= '1';
-             purge_set <= clock_hand;
-           else
+      --    if clock(clock_hand) = '0' then
+      --       purge_found <= '1';
+      --       purge_set <= clock_hand;
+      --     else
              clock_hand <= (clock_hand + 1 ) mod NUM_SETS;
-           end if;
-        end if;
+      --     end if;
+      --  end if;
       end if;
     end if;
   end process;
@@ -264,10 +247,10 @@ multi_sets: if NUM_SETS>=1 generate  begin
 
     if rising_edge(clk_i) then
       if hit = '1' or purge = '1' then
-         clock_ram(to_integer(buffer_index)) <= next_clock;
+         clock_ram(to_integer(tag_index)) <= next_clock;
          clock <= next_clock;
       else
-        clock <= clock_ram(to_integer(buffer_index));
+        clock <= clock_ram(to_integer(tag_index));
       end if;
 
       -- if we_i = '1' and purge = '1'  then

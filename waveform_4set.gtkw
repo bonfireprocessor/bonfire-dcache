@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v3.3.66 (w)1999-2015 BSI
-[*] Wed Apr 17 19:38:16 2019
+[*] Thu Apr 18 21:10:48 2019
 [*]
 [dumpfile] "/home/thomas/development/fusesoc_build/vivado2018.2.3/bonfire-dcache_0/sim-ghdl/dcache.ghw"
-[dumpfile_mtime] "Wed Apr 17 19:37:03 2019"
-[dumpfile_size] 1990335
-[savefile] "/home/thomas/development/bonfire/bonfire-dcache/waveform.gtkw"
-[timestart] 2440000000
-[size] 1680 1025
+[dumpfile_mtime] "Thu Apr 18 21:09:48 2019"
+[dumpfile_size] 2274065
+[savefile] "/home/thomas/development/bonfire/bonfire-dcache/waveform_4set.gtkw"
+[timestart] 8252000000
+[size] 1920 1031
 [pos] -1 -1
-*-31.000000 134800000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-28.000000 4392000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] top.
 [treeopen] top.tb_dcache.
 [treeopen] top.tb_dcache.dut.
@@ -23,7 +23,7 @@
 [sst_width] 376
 [signals_width] 334
 [sst_expanded] 1
-[sst_vpaned_height] 600
+[sst_vpaned_height] 601
 @28
 top.tb_dcache.dut.clk_i
 top.tb_dcache.dut.wbs_cyc_i
@@ -40,6 +40,9 @@ top.tb_dcache.dut.wbs_we_i
 top.tb_dcache.dut.wbs_ack_o
 @200
 -
+@23
+#{top.tb_dcache.dut.tag_index[2:0]} top.tb_dcache.dut.tag_index[2] top.tb_dcache.dut.tag_index[1] top.tb_dcache.dut.tag_index[0]
+@200
 -
 -
 @28
@@ -65,23 +68,20 @@ top.tb_dcache.dut.wbm_ack_i
 top.tb_dcache.dut.miss
 top.tb_dcache.dut.hit
 top.tb_dcache.dut.wbm_state
-@22
-#{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[3:0]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[3] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[2] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[1] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[0]
-@24
-top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.round_robin[0]
-@28
-top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.purge
 top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.hit_o
 top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.miss_o
 top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.dirty_miss_o
-top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.selected_set_index
 #{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.we[0:1]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.we[0] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.we[1]
 top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.we_i
-#{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[0][1:0]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[0][1] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[0][0]
-#{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[1][1:0]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[1][1] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[1][0]
-#{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[2][1:0]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[2][1] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[2][0]
-#{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[3][1:0]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[3][1] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[3][0]
-@29
-#{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[4][1:0]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[4][1] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[4][0]
+@22
+#{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[3:0]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[2] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[1] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.sets[0].buffer_index_o[0]
+@28
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.purge_set
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.purge
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.purge_found
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.selected_set_index
+top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_hand
+#{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock[3:0]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock[3] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock[2] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock[1] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock[0]
+#{top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[0][3:0]} top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[0][3] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[0][2] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[0][1] top.tb_dcache.dut.sa.bonfire_dcache_multi_sets_i.clock_ram[0][0]
 [pattern_trace] 1
 [pattern_trace] 0

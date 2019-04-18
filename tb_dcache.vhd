@@ -31,9 +31,9 @@ constant  CACHE_SIZE : natural :=128;
 --constant  CACHE_SIZE : natural :=2048;
 constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
 
-constant NUM_SETS : natural := 2;
+constant NUM_SETS : natural := 4;
 constant DIRECT_MAPPED : boolean := NUM_SETS = 1;
-constant FULL_SCAN : boolean := false;
+constant FULL_SCAN : boolean := true;
 
 
 
