@@ -87,11 +87,11 @@ type t_clockram is array (0 to TAG_RAM_SIZE-1 ) of t_clockbits;
 
 signal sets : t_sets;
 signal selected_set_index, hit_set : t_setindex;
-signal round_robin : unsigned(max(LOG2_SETS-1,0) downto 0) := ( others=> '0');
+--signal round_robin : unsigned(max(LOG2_SETS-1,0) downto 0) := ( others=> '0');
 signal we : std_logic_vector( 0 to NUM_SETS-1 );
 signal dirty_miss : std_logic;
 signal hit : std_logic;
-signal miss : std_logic;
+--signal miss : std_logic;
 signal purge : std_logic; -- Valid cache line must be purged
 signal buffer_index, tag_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0);
 
@@ -110,11 +110,17 @@ signal purge_found : std_logic := '0';
 
 begin
 
+  assert NUM_SETS>1
+    report "Using this module with NUM_SETS=1 is not supported"
+    severity failure;
+
   buffer_index <= sets(0).buffer_index_o; -- all buffer indexes are identical...
   buffer_index_o <= buffer_index;
   tag_index <= sets(0).tag_index_o;
   tag_index_o <= tag_index;
+
   selected_set_index <= purge_set when purge_found='1' else hit_set;
+  selected_set_o <= std_logic_vector(to_unsigned(selected_set_index,selected_set_o'length));
   miss_o <= purge_found;
   tag_value_o <= sets(selected_set_index).tag_value_o;
   dirty_miss <= sets(selected_set_index).dirty_miss_o;
@@ -124,6 +130,8 @@ begin
 
 
   gensets: for i in sets'range generate
+
+
     inst_bonfire_dcache_set : entity work.bonfire_dcache_set
     generic map (
       CL_BITS            => CL_BITS,
@@ -171,9 +179,8 @@ begin
 
 
 -- hit/mis logic and set selector
-  find_set : process (en_i,sets,round_robin)
+  find_set : process (en_i,sets)
   variable h : std_logic;
-  --variable selected_set : natural;
   variable found : boolean;
 
   begin
@@ -197,15 +204,17 @@ begin
   end process;
 
 
-multi_sets: if NUM_SETS>=1 generate  begin
 
-  selected_set_o <= std_logic_vector(to_unsigned(selected_set_index,selected_set_o'length));
+
+
+
+
+ -- Clock  algorihtm
 
   purge_found <= '1' when purge = '1' and clock(clock_hand) ='0'
                   else '0';
 
   purge_set <= clock_hand;
-
   p_next_clock_comb: process(en_i,hit,selected_set_index,purge,purge_found,clock_hand)
 
   begin
@@ -225,17 +234,8 @@ multi_sets: if NUM_SETS>=1 generate  begin
   p_clock_hand : process(clk_i)
   begin
     if rising_edge(clk_i) then
-      --if we_i = '1' then
-      --  purge_found <= '0';
-  --    if en_i= '1' then
-        if purge ='1' and purge_found = '0' then
-      --    if clock(clock_hand) = '0' then
-      --       purge_found <= '1';
-      --       purge_set <= clock_hand;
-      --     else
-             clock_hand <= (clock_hand + 1 ) mod NUM_SETS;
-      --     end if;
-      --  end if;
+      if purge ='1' and purge_found = '0' then
+        clock_hand <= (clock_hand + 1 ) mod NUM_SETS;
       end if;
     end if;
   end process;
@@ -253,14 +253,9 @@ multi_sets: if NUM_SETS>=1 generate  begin
         clock <= clock_ram(to_integer(tag_index));
       end if;
 
-      -- if we_i = '1' and purge = '1'  then
-      --   round_robin <= round_robin + 1;
-      -- end if;
     end if;
 
   end process;
-
-end generate;
 
 
 end Behavioral;

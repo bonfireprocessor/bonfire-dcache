@@ -33,7 +33,7 @@ constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
 
 constant NUM_SETS : natural := 4;
 constant DIRECT_MAPPED : boolean := NUM_SETS = 1;
-constant FULL_SCAN : boolean := true;
+constant FULL_SCAN : boolean := false;
 
 
 
@@ -470,9 +470,18 @@ begin
         if not DIRECT_MAPPED then
           print("Test for set associative cache");
           for i in  1 to NUM_SETS+1 loop
-            print_t("Loop:" & str(i));
-            read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS * i ,32)),LINE_SIZE_WORDS,s);
+            temp := std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS * i ,32));
+            print_t(hex_string(temp));
+            read_loop(temp,LINE_SIZE_WORDS,s);
             assert s report "Test failed" severity failure;
+          end loop;
+          wait for 5*TbPeriod; -- just to make Waveform easier to navigate
+          print_t("Accessing all sets");
+          for i in NUM_SETS+1 downto 1 loop
+            if i=1 then   print("Force purge"); end if;
+            temp := std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS * i,32));
+            print_t(hex_string(temp));
+            wb_read(temp,d);
           end loop;
           print("OK");
         else
