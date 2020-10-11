@@ -1,45 +1,56 @@
-CAPI=1
-[main]
-name = ::bonfire-dcache:0
-depend = ::bonfire-util:0
-backend = ise
-simulators=isim xsim
+CAPI=2:
+name: ::bonfire-dcache:0
 
-[fileset rtl_spartan6]
-files = spartan6/ram2048x8.vhd
-file_type=vhdlSource
-usage=isim synth xsim
+filesets:
+  rtl:
+    depend: 
+    - ::bonfire-util:0
+    file_type: vhdlSource
+    files:
+    - bonfire_dcache_cacheram.vhd
+    - spartan6/dcache_ram8K_spartan6.vhd
+    - bonfire_dcache.vhd
 
-[fileset rtl_spartan6_sim]
-files= spartan6/ram2048x8_sim.vhd
-file_type=vhdlSource
-usage=ghdl
+  rtl_spartan6:
+    file_type: vhdlSource
+    files: 
+    - spartan6/ram2048x8.vhd
+
+  rtl_spartan6_sim:
+    file_type: vhdlSource
+    files: 
+    - spartan6/ram2048x8_sim.vhd
+
+  sim:
+    file_type: vhdlSource
+    files: 
+    - tb_dcache.vhd
+
+targets:
+  default:
+    filesets:
+    - rtl
+
+  synth-spartan6:
+    filesets:
+    - rtl
+    - rtl_spartan6
+
+  sim:
+    default_tool: ghdl
+    filesets:
+    - rtl
+    - sim
+    - rtl_spartan6_sim
+
+    toplevel: tb_dcache
+    tools:
+        ghdl:
+          analyze_options: [--ieee=synopsys, -frelaxed-rules, --std=08 ]
+          run_options: [ --ieee-asserts=disable, --max-stack-alloc=0 ] #,  , --wave=soc.ghw ]
+        xsim:
+          xelab_options: [ "--debug typical" ]  
+    
 
 
-[fileset rtl]
-files =  bonfire_dcache_cacheram.vhd
-         spartan6/dcache_ram8K_spartan6.vhd
-         bonfire_dcache.vhd
-file_type=vhdlSource
 
-
-[fileset sim]
-files=./tb_dcache.vhd
-file_type=vhdlSource
-usage=sim
-scope = private
-
-
-
-[simulator]
-toplevel = tb_dcache
-
-[ghdl]
-analyze_options = --ieee=synopsys -frelaxed-rules
-#run_options = --ieee=synopsys -frelaxed-rules
-
-
-#[provider]
-#name=github
-#user=bonfireprocessor
-#repo=bonfire-dcache
