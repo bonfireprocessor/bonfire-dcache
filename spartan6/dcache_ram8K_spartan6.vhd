@@ -52,6 +52,20 @@ architecture Behavioral of dcache_ram8K_spartan6 is
 --attribute keep_hierarchy : string;
 --attribute keep_hierarchy of Behavioral: architecture is keep_h;
 
+component ram2048x8 
+   Port ( DOutA : out  STD_LOGIC_VECTOR (7 downto 0);
+   DInA : in  STD_LOGIC_VECTOR (7 downto 0);
+   AdrA : in  STD_LOGIC_VECTOR (10 downto 0);
+   ENA : in  STD_LOGIC;
+   WRENA : in  STD_LOGIC;
+   CLKA : in  STD_LOGIC;
+   DoutB : out  STD_LOGIC_VECTOR (7 downto 0);
+   DInB : in  STD_LOGIC_VECTOR (7 downto 0);
+   AdrB : in  STD_LOGIC_VECTOR (10 downto 0);
+   ENB : in  STD_LOGIC;
+   WRENB : in  STD_LOGIC;
+   CLKB : in  STD_LOGIC);
+end component;
 
 
 begin
@@ -63,7 +77,8 @@ begin
 
    genmem : for i in 0 to 3 generate
 
-      Inst_ram2048x8: entity work.ram2048x8 PORT MAP(
+      Inst_ram2048x8: ram2048x8
+      PORT MAP(
          DOutA => slave_db_o((i+1)*8 -1 downto i*8),
          DInA => slave_db_i((i+1)*8 -1 downto i*8),
          AdrA => slave_adr_i,
