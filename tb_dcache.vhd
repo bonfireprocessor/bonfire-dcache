@@ -71,7 +71,7 @@ constant FULL_SCAN : boolean := false;
 
     subtype t_wbm_dat is std_logic_vector (wbm_dat_i'high downto wbm_dat_i'low);
 
-     -- our simulated RAM is three times the cache size, this is enough for write testing...
+     -- our simulated RAM is four times the cache size, this is enough for write testing...
      type t_simul_ram is array (0 to CACHE_SIZE*4-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
      signal ram : t_simul_ram := (others=>( others=>'U'));
 

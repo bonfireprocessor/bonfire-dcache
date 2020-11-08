@@ -40,7 +40,7 @@ toplevel = tb_dcache
 
 [ghdl]
 analyze_options = --ieee=synopsys -frelaxed-rules
-run_options = --wave=dcache.ghw
+run_options = --wave=dcache.ghw --ieee-asserts=disable
 #run_options = --ieee=synopsys -frelaxed-rules
 
 
