@@ -30,12 +30,14 @@ targets:
   default:
     filesets:
     - rtl
+    - rtl_spartan6_sim 
 
   synth-spartan6:
     filesets:
     - rtl
     - rtl_spartan6
 
+ 
   sim:
     default_tool: ghdl
     filesets:

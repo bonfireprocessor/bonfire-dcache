@@ -70,6 +70,7 @@ architecture Behavioral of bonfire_dcache is
 --attribute keep_hierarchy of Behavioral: architecture is "TRUE";
 
 constant spartan6_name : string := "SPARTAN6";
+constant ecp5_name : string := "ECP5";
 
 constant  WORD_SELECT_BITS : natural := log2.log2(MASTER_DATA_WIDTH/32);
 constant CL_BITS : natural :=log2.log2(LINE_SIZE); -- Bits for adressing a word in a cache line
@@ -94,7 +95,9 @@ constant CACHEADR_HI : natural  := CACHEADR_LOW+CACHE_ADR_BITS-1;
 
 
 -- Generation options
-constant gen_sp6_special : boolean := DEVICE_FAMILY = spartan6_name and CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32;
+constant special_family : boolean := DEVICE_FAMILY = spartan6_name or DEVICE_FAMILY = ecp5_name;
+
+constant gen_sp6_special : boolean := special_family and CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32;
 
 
 subtype t_tag_value is unsigned(TAG_RAM_BITS-1 downto 0);
@@ -201,10 +204,9 @@ signal slave_en_i, master_en_i, master_we_i : std_logic;
 begin
 
 
-  assert (DEVICE_FAMILY=spartan6_name and gen_sp6_special) or
-         (DEVICE_FAMILY /= spartan6_name )
-  report "Module bonfire_dcache: On Spartan 6 generic synthesis of Cache RAM will most likely fail, use only CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32 for a hard coded work around"
-  severity warning;
+  assert (special_family and gen_sp6_special) or not special_family
+    report "Module bonfire_dcache: On Spartan 6 generic synthesis of Cache RAM will most likely fail, use only CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32 for a hard coded work around"
+    severity warning;
 
 
 
