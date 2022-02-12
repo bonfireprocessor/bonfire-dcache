@@ -18,6 +18,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 use work.log2;
+use work.bonfire_dcache_help.all;
 
 -- Uncomment the following library declaration if instantiating
 -- any Xilinx leaf cells in this code.
@@ -30,7 +31,8 @@ generic(
   LINE_SIZE : natural :=4; -- Line size in MASTER_DATA_WIDTH  words
   CACHE_SIZE : natural :=2048; -- Cache Size in MASTER_DATA_WIDTH Bit words
   ADDRESS_BITS : natural := 30;  -- Number of bits of chacheable address range
-  DEVICE_FAMILY : string :=""
+  DEVICE_FAMILY : string :="";
+  NUM_SETS : natural := 1 -- Number of Cache Sets
 );
 Port (
    clk_i: in std_logic;
@@ -71,9 +73,12 @@ architecture Behavioral of bonfire_dcache is
 
 constant spartan6_name : string := "SPARTAN6";
 
-constant  WORD_SELECT_BITS : natural := log2.log2(MASTER_DATA_WIDTH/32);
+constant WORD_SELECT_BITS : natural := log2.log2(MASTER_DATA_WIDTH/32);
 constant CL_BITS : natural :=log2.log2(LINE_SIZE); -- Bits for adressing a word in a cache line
-constant CACHE_ADR_BITS : natural := log2.log2(CACHE_SIZE); -- total adress bits for cache
+constant SET_ADR_BITS : natural := log2.log2(NUM_SETS);
+constant DIRECT_MAPPED : boolean := NUM_SETS = 1;
+constant CACHE_ADR_BITS : natural := log2.log2(CACHE_SIZE) - SET_ADR_BITS; -- total adress bits for cache
+
 constant LINE_SELECT_ADR_BITS : natural := CACHE_ADR_BITS-CL_BITS; -- adr bits for selecting a cache line
 constant TAG_RAM_SIZE : natural := log2.power2(LINE_SELECT_ADR_BITS); -- the Tag RAM size is defined by the size of line select address
 constant TAG_RAM_BITS: natural := ADDRESS_BITS-LINE_SELECT_ADR_BITS-CL_BITS-WORD_SELECT_BITS;
@@ -96,50 +101,16 @@ constant CACHEADR_HI : natural  := CACHEADR_LOW+CACHE_ADR_BITS-1;
 -- Generation options
 constant gen_sp6_special : boolean := DEVICE_FAMILY = spartan6_name and CACHE_SIZE=2048 and MASTER_DATA_WIDTH=32;
 
-
-subtype t_tag_value is unsigned(TAG_RAM_BITS-1 downto 0);
-subtype t_dirty_bits is std_logic_vector(MASTER_WIDTH_BYTES-1 downto 0);
-
-type t_tag_data is record
-   valid : std_logic;
-   dirty : std_logic;
-   address : t_tag_value;
-end record;
-
-constant tag_rec_len:natural:= 1+t_tag_value'length+1;
-
-subtype t_tag_bits is std_logic_vector(tag_rec_len-1 downto 0);
-
-constant init_dirty_bits : t_dirty_bits := (others=>'0');
-constant init_tag_data : t_tag_data := ('0','0',to_unsigned(0,t_tag_value'length));
-
-type t_tag_ram is array (0 to TAG_RAM_SIZE-1) of t_tag_bits;
---type t_cache_ram is array (0 to CACHE_SIZE-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
-
-signal tag_value : t_tag_value;
-signal tag_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0); -- Offset into TAG RAM
-
-signal tag_ram : t_tag_ram := (others =>(others=> '0')) ;
-attribute ram_style: string; -- for Xilinx
-attribute ram_style of tag_ram: signal is  "distributed"; -- "block";
-
-signal tag_we : std_logic:='0'; -- Tag RAM Write Enable - updates Tag RAM
-
-
+-- Slave bus
 signal slave_adr : std_logic_vector (wbs_adr_i'range);
 signal wbs_enable : std_logic;
-
-signal tag_buffer : t_tag_data; -- last buffered tag value
-signal buffer_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0); -- index of last buffered tag value
-
-signal tag_out,tag_in : t_tag_bits; -- input and output of tag RAM
-
-
-signal hit,miss : std_logic;
-
 signal slave_rd_ack : std_logic :='0';
-
 signal slave_write_enable : std_logic; -- combinatorial, slave write cycle enabled
+
+-- Tag RAM Interface
+signal tag_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0); -- Offset into TAG RAM
+signal buffer_index : unsigned(LINE_SELECT_ADR_BITS-1 downto 0); -- index of last buffered tag value
+signal hit,miss : std_logic;
 signal write_back_enable : std_logic; -- combinatorial, actual tag line must be written back
 
 -- Bus master signals
@@ -156,15 +127,28 @@ type t_wbm_state is (wb_idle,wb_burst_read,wb_burst_write,wb_finish,wb_retire);
 
 signal wbm_state : t_wbm_state:=wb_idle;
 
+-- tag interface
+signal tag_dirty, tag_valid, tag_we : std_logic;
+signal tag_buffer_address : unsigned(TAG_RAM_BITS-1 downto 0);
+
 
 -- Cache RAM Interface
-signal cache_AdrBus : std_logic_vector(CACHE_ADR_BITS-1 downto 0);
+subtype t_cacheadr is std_logic_vector(CACHE_ADR_BITS+SET_ADR_BITS-1 downto 0);
+
+signal cache_AdrBus : t_cacheadr;
 signal cache_DBOut,cache_DBIn : std_logic_vector (MASTER_DATA_WIDTH-1 downto 0);
 signal cache_wren : std_logic_vector (MASTER_WIDTH_BYTES-1 downto 0);
 signal slave_en_i, master_en_i, master_we_i : std_logic;
+signal slave_cache_adr : t_cacheadr;
+
+-- Set associative cache
+subtype t_setselector is std_logic_vector(max(SET_ADR_BITS-1,0) downto 0);
+signal selected_set : t_setselector;
+signal slave_set : t_setselector;
+signal master_set : t_setselector;
 
 
- function is_sel(adr: std_logic_vector (slave_adr'range);mux:natural) return boolean is
+   function is_sel(adr: std_logic_vector (slave_adr'range);mux:natural) return boolean is
    variable res: boolean;
    begin
      if MUX_SIZE=1 then
@@ -176,30 +160,8 @@ signal slave_en_i, master_en_i, master_we_i : std_logic;
 
    end function;
 
-   function to_tag_bits(t:t_tag_data) return t_tag_bits is
-   variable r: t_tag_bits;
-   begin
-     r(r'high):=t.valid;
-     r(r'high-1):=t.dirty;
-     r(r'high-2 downto 0):=std_logic_vector(t.address);
-     return r;
-   end function;
-
-   function to_tag_data(t:t_tag_bits) return t_tag_data is
-   variable r:t_tag_data;
-   begin
-     r.valid:=t(t'high);
-     r.dirty:=t(t'high-1);
-     r.address:=unsigned(t(t'high-2 downto 0));
-     return r;
-   end function;
-
-
-
-
 
 begin
-
 
   assert (DEVICE_FAMILY=spartan6_name and gen_sp6_special) or
          (DEVICE_FAMILY /= spartan6_name )
@@ -207,127 +169,152 @@ begin
   severity warning;
 
 
-
   slave_adr <= wbs_adr_i; -- currently only an alias...
-
-  tag_value <= unsigned(slave_adr(slave_adr'high downto slave_adr'high-TAG_RAM_BITS+1));
-
-  tag_index <= unsigned (slave_adr(tag_index'length+CL_BITS_SLAVE+slave_adr'low-1 downto CL_BITS_SLAVE+slave_adr'low));
-
   wbs_enable <= wbs_cyc_i and wbs_stb_i;
-
-  slave_write_enable <= wbs_enable and wbs_we_i and hit;
-
-  write_back_enable <= '1' when miss='1' and tag_buffer.valid='1' and tag_buffer.dirty='1'
-                       else '0';
-
 
   wbs_ack_o <= slave_rd_ack or slave_write_enable;
 
+  slave_write_enable <= wbs_enable and wbs_we_i and hit;
 
 
-
-
-  check_hitmiss : process(tag_value,tag_buffer,buffer_index,tag_index,wbs_enable)
-    variable index_match,tag_match : boolean;
-
-    begin
-      index_match:= buffer_index = tag_index;
-      tag_match:=tag_buffer.valid='1' and tag_buffer.address=tag_value;
-
-
-      if  index_match and tag_match and wbs_enable='1' then
-        hit<='1';
-      else
-        hit<='0';
-      end if;
-
-      -- A miss only occurs when the tag buffer contains data for the right index but
-      -- the tag itself does not match
-      if wbs_enable='1' and index_match and not tag_match then
-        miss<='1';
-      else
-        miss<='0';
-      end if;
-    end process;
-
-
-
-  -- mapping between tag bitstring and record, needed because of synthesis limiations
-  tag_in <= to_tag_bits( (not write_back_enable,slave_write_enable,tag_value));
-  tag_buffer <= to_tag_data(tag_out);
-
-  proc_tag_ram:process(clk_i)
-
-      variable rd,wd : t_tag_data;
-      begin
-        if rising_edge(clk_i) then
-          if rst_i='1' then
-             tag_out<=  to_tag_bits(init_tag_data);
-          else
-             if tag_we='1' or slave_write_enable='1'  then
-               tag_ram(to_integer(tag_index))<=tag_in;
-               tag_out <= tag_in; -- write first RAM...
-             else
-               tag_out <=tag_ram(to_integer(tag_index));
-             end if;
-          end if;
-          buffer_index<=tag_index;
-          --tag_out <= tag_ram(to_integer(tag_index)); -- read first RAM
-        end if;
-
-      end process;
-
-
-
-  cache_dbmux: for i in 0 to MUX_SIZE-1 generate
-  begin
-     -- For writing the Slave bus can just be demutiplexed n times
-     -- Write Enable is done on byte lane level
-     cache_DBIn((i+1)*32-1 downto i*32)<=wbs_dat_i;
-  end generate;
-
-
-
-     proc_cache_wren:process(wbs_sel_i,slave_adr,wbs_we_i) begin
-
-      for i in 0 to MUX_SIZE-1 loop
-        if is_sel(slave_adr,i) and wbs_we_i='1' then
-          cache_wren((i+1)*4-1 downto i*4) <= wbs_sel_i;
-        else
-          cache_wren((i+1)*4-1 downto i*4) <= "0000";
-        end if;
-       end loop;
-
-     end process;
-
-
-     proc_cache_rdmux:process(cache_DBOut,slave_adr) begin
-    -- Databus Multiplexer, select the 32 Bit word from the cache ram word.
-       for i in 0 to MUX_SIZE-1 loop
-         if is_sel(slave_adr,i) then
-           wbs_dat_o <= cache_DBOut((i+1)*32-1 downto i*32);
-         end if;
-       end loop;
-     end process;
-
+  -- Wishbone ack signal for cache reads
 
   proc_slave_rd_ack: process(clk_i) begin
 
-     if rising_edge(clk_i) then
-       if slave_rd_ack='1' then
-          slave_rd_ack <= '0';
-       elsif hit='1' and wbs_enable='1' and wbs_we_i='0'  then
-         slave_rd_ack<='1';
-       end if;
-     end if;
+    if rising_edge(clk_i) then
+      if slave_rd_ack='1' then
+         slave_rd_ack <= '0';
+      elsif hit='1' and wbs_enable='1' and wbs_we_i='0'  then
+        slave_rd_ack<='1';
+      end if;
+    end if;
 
   end process;
 
 
-  -- Interface to Cache RAM
+  tag_we <= '1' when (wbm_ack_i='1' and wbm_state=wb_finish) or slave_write_enable = '1' else '0';
+  tag_dirty <= slave_write_enable;
+  tag_valid <= not write_back_enable;
 
-  slave_en_i <= hit and wbs_enable;
+  dm: if DIRECT_MAPPED generate
+
+  inst_bonfire_dcache_set : entity work.bonfire_dcache_set
+  generic map (
+    CL_BITS            => CL_BITS,
+    CACHE_ADR_BITS     => CACHE_ADR_BITS,
+    TAG_RAM_BITS       => TAG_RAM_BITS,
+    ADDRESS_BITS       => ADDRESS_BITS,
+    MASTER_WIDTH_BYTES => MASTER_WIDTH_BYTES,
+    DEVICE_FAMILY      => DEVICE_FAMILY
+  )
+  port map (
+    clk_i   => clk_i,
+    rst_i   => rst_i,
+    adr_i   => slave_adr,
+    en_i    => wbs_enable,
+    we_i    => tag_we,
+    dirty_i => tag_dirty,
+    valid_i => tag_valid,
+    tag_index_o => tag_index,
+    hit_o   => hit,
+    miss_o  => miss,
+    dirty_miss_o => write_back_enable,
+    tag_value_o => tag_buffer_address,
+    buffer_index_o => buffer_index
+  );
+
+
+slave_cache_adr <= slave_adr(CACHEADR_HI  downto CACHEADR_LOW);
+
+cache_AdrBus<= std_logic_vector(buffer_index) &
+               std_logic_vector (cache_offset_counter) when write_back_enable='1'  else
+
+               std_logic_vector(tag_index) & std_logic_vector(master_offset_counter);
+
+end generate;
+
+
+sa: if not DIRECT_MAPPED  generate
+bonfire_dcache_multi_sets_i : entity work.bonfire_dcache_multi_sets
+generic map (
+  LOG2_SETS          => SET_ADR_BITS,
+  CL_BITS            => CL_BITS,
+  CACHE_ADR_BITS     => CACHE_ADR_BITS,
+  TAG_RAM_BITS       => TAG_RAM_BITS,
+  ADDRESS_BITS       => ADDRESS_BITS,
+  MASTER_WIDTH_BYTES => MASTER_WIDTH_BYTES,
+  DEVICE_FAMILY      => DEVICE_FAMILY
+)
+port map (
+  clk_i   => clk_i,
+  rst_i   => rst_i,
+  adr_i   => slave_adr,
+  en_i    => wbs_enable,
+  we_i    => tag_we,
+  dirty_i => tag_dirty,
+  valid_i => tag_valid,
+  tag_index_o => tag_index,
+  hit_o   => hit,
+  miss_o  => miss,
+  dirty_miss_o => write_back_enable,
+  tag_value_o => tag_buffer_address,
+  buffer_index_o => buffer_index,
+  selected_set_o => selected_set
+);
+
+
+slave_set <= selected_set;
+master_set <= selected_set;
+
+slave_cache_adr <= slave_set & slave_adr(CACHEADR_HI  downto CACHEADR_LOW);
+
+cache_AdrBus<= master_set &
+               std_logic_vector(buffer_index) &
+               std_logic_vector (cache_offset_counter) when write_back_enable='1'  else
+
+               master_set &  std_logic_vector(tag_index) & std_logic_vector(master_offset_counter);
+
+end generate;
+
+
+
+   cache_dbmux: for i in 0 to MUX_SIZE-1 generate
+   begin
+     -- For writing the Slave bus can just be demutiplexed n times
+     -- Write Enable is done on byte lane level
+     cache_DBIn((i+1)*32-1 downto i*32)<=wbs_dat_i;
+   end generate;
+
+
+ -- Interface to Cache RAM
+
+   slave_en_i <= hit and wbs_enable;
+
+   proc_cache_wren:process(wbs_sel_i,slave_adr,wbs_we_i) begin
+
+    for i in 0 to MUX_SIZE-1 loop
+      if is_sel(slave_adr,i) and wbs_we_i='1' then
+        cache_wren((i+1)*4-1 downto i*4) <= wbs_sel_i;
+      else
+        cache_wren((i+1)*4-1 downto i*4) <= "0000";
+      end if;
+     end loop;
+
+   end process;
+
+
+   proc_cache_rdmux:process(cache_DBOut,slave_adr) begin
+  -- Databus Multiplexer, select the 32 Bit word from the cache ram word.
+     wbs_dat_o <= (others => 'X');
+     for i in 0 to MUX_SIZE-1 loop
+       if is_sel(slave_adr,i) then
+         wbs_dat_o <= cache_DBOut((i+1)*32-1 downto i*32);
+       end if;
+     end loop;
+   end process;
+
+
+
 
   master_en_i <= '1' when (wbm_ack_i='1' and wbm_enable='1') or
                          (write_back_enable='1' and wbm_state=wb_idle)
@@ -335,14 +322,8 @@ begin
 
   master_we_i <= wbm_ack_i and  not write_back_enable;
 
-  cache_AdrBus<= std_logic_vector(buffer_index) &
-                 std_logic_vector (cache_offset_counter) when write_back_enable='1'  else
-
-                 std_logic_vector(tag_index) & std_logic_vector(master_offset_counter);
-
 
   cache_ram_generic: if not gen_sp6_special generate
-
 
   Inst_bonfire_dcache_cacheram: entity work.bonfire_dcache_cacheram
   GENERIC MAP (
@@ -356,7 +337,7 @@ begin
       slave_db_o => cache_DBOut,
       slave_wren_i => cache_wren,
       slave_en_i => slave_en_i ,
-      slave_adr_i => slave_adr(CACHEADR_HI  downto CACHEADR_LOW),
+      slave_adr_i => slave_cache_adr,
       master_db_i => wbm_dat_i,
       master_db_o => cache_ram_out,
       master_we_i => master_we_i,
@@ -382,7 +363,7 @@ cache_ram_spartan6: if gen_sp6_special generate
       slave_db_o => cache_DBOut,
       slave_wren_i => cache_wren,
       slave_en_i => slave_en_i ,
-      slave_adr_i => slave_adr(CACHEADR_HI  downto CACHEADR_LOW),
+      slave_adr_i => slave_cache_adr,
       master_db_i => wbm_dat_i,
       master_db_o => cache_ram_out,
       master_we_i => master_we_i,
@@ -398,7 +379,7 @@ end generate;
 
    wbm_cyc_o <=  wbm_enable;
    wbm_stb_o <=  wbm_enable;
-   master_address <=  std_logic_vector(tag_buffer.address) &
+   master_address <=  std_logic_vector(tag_buffer_address) &
                       std_logic_vector(buffer_index) &
                       std_logic_vector (master_offset_counter) when write_back_enable='1'
                       else slave_adr(master_address'high downto master_address'low+master_offset_counter'length) & std_logic_vector(master_offset_counter);
@@ -406,7 +387,7 @@ end generate;
 
    wbm_dat_o <= cache_ram_out;
 
-   tag_we <= '1' when wbm_ack_i='1' and wbm_state=wb_finish else '0';
+
 
    master_rw: process(clk_i) -- Master cycle state engine
    variable n : unsigned(master_offset_counter'range);

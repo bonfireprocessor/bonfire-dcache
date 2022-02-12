@@ -7,9 +7,12 @@ filesets:
     - ::bonfire-util:0
     file_type: vhdlSource
     files:
+    - bonfire_dcache_help.vhd
     - bonfire_dcache_cacheram.vhd
     - spartan6/dcache_ram8K_spartan6.vhd
     - bonfire_dcache.vhd
+    - bonfire_dcache_multi_sets.vhd
+    - bonfire_dcache_set.vhd
 
   rtl_spartan6:
     file_type: vhdlSource
@@ -25,6 +28,7 @@ filesets:
     file_type: vhdlSource
     files: 
     - tb_dcache.vhd
+
 
 targets:
   default:

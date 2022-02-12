@@ -31,6 +31,10 @@ constant  CACHE_SIZE : natural :=128;
 --constant  CACHE_SIZE : natural :=2048;
 constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
 
+constant NUM_SETS : natural := 4;
+constant DIRECT_MAPPED : boolean := NUM_SETS = 1;
+constant FULL_SCAN : boolean := false;
+
 
 
     signal clk_i     : std_logic;
@@ -67,9 +71,8 @@ constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
 
     subtype t_wbm_dat is std_logic_vector (wbm_dat_i'high downto wbm_dat_i'low);
 
-     -- our simulated RAM is twice the cache size, this is enough for write testing...
-     type t_simul_ram is array (0 to CACHE_SIZE*2-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
-
+     -- our simulated RAM is four times the cache size, this is enough for write testing...
+     type t_simul_ram is array (0 to CACHE_SIZE*4-1) of std_logic_vector(MASTER_DATA_WIDTH-1 downto 0);
      signal ram : t_simul_ram := (others=>( others=>'U'));
 
     -- Testbench can run in pattern mode, for address read tests
@@ -135,13 +138,19 @@ constant  CACHE_SIZE_BYTES : natural := CACHE_SIZE*MASTER_DATA_WIDTH/8;
         return s(i downto 1);
     end function;
 
+    procedure print_t( s:string ) is
+    begin
+      print(s &  " @ " & integer'image( now / 1 ns) & " ns" );
+    end;
+
 begin
 
     dut : entity work.bonfire_dcache
     generic  map (
       MASTER_DATA_WIDTH => MASTER_DATA_WIDTH,
       LINE_SIZE => LINE_SIZE,
-      CACHE_SIZE => CACHE_SIZE
+      CACHE_SIZE => CACHE_SIZE,
+      NUM_SETS => NUM_SETS
       --DEVICE_FAMILY => "SPARTAN6"
     )
     port map (clk_i     => clk_i,
@@ -179,6 +188,9 @@ begin
          if sim_mode=sim_pattern then
            wbm_dat_i <= get_pattern(wbm_adr_o);
          else
+           assert unsigned(wbm_adr_o)<= ram'high
+              report " Out of bounds RAM access at address: " & hex_string(wbm_adr_o) &  " @ " & integer'image( now / 1 ns) & " ns"
+              severity failure;
            wbm_dat_i <= ram(to_integer(unsigned(wbm_adr_o)));
          end if;
        else
@@ -259,7 +271,7 @@ begin
            wb_read(std_logic_vector(adr),d);
            s:= d = adr;
            if s then
-             print("Sucessfull read from address " & hex_string(adr) & " Data:" & hex_string(d));
+            -- print("Sucessfull read from address " & hex_string(adr) & " Data:" & hex_string(d));
            else
              report "Error reading from address " & hex_string(adr) & " Data:" & hex_string(d)
              severity error;
@@ -397,11 +409,16 @@ begin
         -- tests as side effect the write back logic
         procedure write_all is
         variable adr: std_logic_vector(31 downto 0);
+        constant len : natural := ram'length*(MASTER_DATA_WIDTH/32) / 2;
         begin
-          for i in 0 to ram'length*(MASTER_DATA_WIDTH/32) -1 loop
+          for i in 0 to len -1 loop
              adr:=std_logic_vector(to_unsigned(i*4,32));
              wb_write(adr,adr);
           end loop;
+          for i in len to 2*len -1 loop
+              adr:=std_logic_vector(to_unsigned(i*4,32));
+              wb_write(adr,adr);
+           end loop;
         end procedure;
 
 
@@ -414,6 +431,11 @@ begin
        print("Line Size  " & str(LINE_SIZE_BYTES) & " Bytes ");
        print("CACHE_SIZE: " & str(CACHE_SIZE) & "* " &  str(MASTER_DATA_WIDTH) & " bits");
        print("Cache Size " & str(CACHE_SIZE_BYTES) & " Bytes");
+       if not DIRECT_MAPPED then
+         print("Sets: " & str(NUM_SETS));
+         print("Bank Size: " & str(CACHE_SIZE_BYTES/NUM_SETS) & " Bytes");
+       end if;
+       print("Test RAM size: " & str(ram'length));
 
         -- EDIT Adapt initialization as needed
         rst_i <= '0';
@@ -433,23 +455,43 @@ begin
         -- address range
         sim_mode<=sim_pattern;
 
-        print("read two cache lines");
+        print_t("read two cache lines");
         read_loop(X"00000000",LINE_SIZE_WORDS*2,s);
         assert s report "Test failed" severity failure;
         print("OK");
-        print("read  the same two cache lines");
+        print_t("read  the same two cache lines");
         read_loop(X"00000000",LINE_SIZE_WORDS*2,s); --
         assert s report "Test failed" severity failure;
         print("OK");
-        print("read from last line of Cache");
-        read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES-LINE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s);
+        print_t("read from last line of Cache");
+        read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS-LINE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s);
         assert s report "Test failed" severity failure;
         print("OK");
-        print("wrap around, should invalidate line 0");
-        read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s); --
-        assert s report "Test failed" severity failure;
-        print("OK");
-        print("read from end of address range");
+        if not DIRECT_MAPPED then
+          print("Test for set associative cache");
+          for i in  1 to NUM_SETS+1 loop
+            temp := std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS * i ,32));
+            print_t(hex_string(temp));
+            read_loop(temp,LINE_SIZE_WORDS,s);
+            assert s report "Test failed" severity failure;
+          end loop;
+          wait for 5*TbPeriod; -- just to make Waveform easier to navigate
+          print_t("Accessing all sets");
+          for i in NUM_SETS+1 downto 1 loop
+            if i=1 then   print("Force purge"); end if;
+            temp := std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS * i,32));
+            print_t(hex_string(temp));
+            wb_read(temp,d);
+          end loop;
+          print("OK");
+        else
+          print_t("wrap around, should invalidate line 0");
+          read_loop(std_logic_vector(to_unsigned(CACHE_SIZE_BYTES,32)),LINE_SIZE_WORDS,s);
+          assert s report "Test failed" severity failure;
+          print("OK");
+        end if;
+
+        print_t("read from end of address range");
         temp:=X"FFFFFFFF" and not std_logic_vector(to_unsigned(LINE_SIZE_BYTES-1,32));
         read_loop(std_logic_vector(temp(31 downto 0)),LINE_SIZE_WORDS,s);
         assert s report "Test failed" severity failure;
@@ -457,7 +499,7 @@ begin
         print("Read Test finished");
         sim_mode<=sim_ram;
 
-        print("Basic write test");
+        print_t("Basic write test");
         wb_write(X"00000000",X"AABBCCDD");
         wb_read(X"00000000",d);
         if d=X"AABBCCDD" then
@@ -466,22 +508,34 @@ begin
           report "Write error" severity failure;
         end if;
 
-        print("Byte Write Test");
+        print_t("Byte Write Test");
         sim_mode<=sim_ram;
         write_string("The quick brown fox jumps over the lazy dog",X"00000000");
         compare_string("The quick brown fox jumps over the lazy dog",X"00000000");
+        if not DIRECT_MAPPED then
+          print("Write test for set associative cache");
+          for i in 0 to NUM_SETS*2+1 Loop
+            temp := std_logic_vector(to_unsigned(CACHE_SIZE_BYTES/NUM_SETS * i ,32 ));
+            print("Testing address " & hex_string(temp) & " @ " & integer'image( now / 1 ns) & " ns");
+            wb_write(temp,X"AA" & temp(23 downto 0));
+            wb_read(temp,d);
+            assert d= (X"AA" & temp(23 downto 0))
+              report "Set test write error on address: " & hex_string(temp)
+              severity error;
+           end loop;
+        end if;
+        if FULL_SCAN then
+          print_t("Initalize all (RAM and Cache)");
+          write_all;
 
-        print("Initalize all (RAM and Cache)");
-        write_all;
-
-        print("Read the whole RAM area");
-        read_loop(X"00000000",ram'length*(MASTER_DATA_WIDTH/32),s);
-        assert s report "Test failed" severity error;
+          print_t("Read the whole RAM area");
+          read_loop(X"00000000",ram'length*(MASTER_DATA_WIDTH/32),s);
+          assert s report "Test failed" severity error;
+        end if;
         -- Stop the clock and hence terminate the simulation
+        print("Simulation finished");
         TbSimEnded <= '1';
         wait;
     end process;
 
 end tb;
-
-

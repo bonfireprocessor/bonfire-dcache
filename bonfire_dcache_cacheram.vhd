@@ -57,6 +57,15 @@ attribute ram_style of cache_ram: variable is "block";
 
 begin
 
+--  debug: process(clk_i)
+--  begin
+--     if rising_edge(clk_i) then
+--       if cache_ram(0) = X"0000000c000000080000000400000800" then
+--         report  "Crash" severity note;
+--       end if;  
+--     end if;
+--  end process; 
+
   proc_cache_ram_slave: process(clk_i) begin
    if rising_edge(clk_i) then
 
