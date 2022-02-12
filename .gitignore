@@ -79,3 +79,4 @@ Thumbs.db
 
 build/*
 /bonfire_dache
+*.backup
